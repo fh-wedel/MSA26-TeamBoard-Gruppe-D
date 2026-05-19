@@ -1,0 +1,36 @@
+name: TeamBoard CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: |
+          python - <<'PY'
+          import ast
+          import glob
+          files = glob.glob('services/**/*.py', recursive=True) + glob.glob('tests/**/*.py', recursive=True)
+          for path in files:
+              with open(path, encoding='utf8') as handle:
+                  ast.parse(handle.read(), path)
+          print(f'validated {len(files)} Python files')
+          PY
+
+      - name: Validate Postman collection JSON
+        run: python -m json.tool postman/TeamBoard.postman_collection.json > /dev/null
+
+      - name: Validate Docker Compose config
+        run: docker compose config --quiet

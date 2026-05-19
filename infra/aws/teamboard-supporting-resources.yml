@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Supporting AWS resources for TeamBoard MVP
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+  DocumentBucketName:
+    Type: String
+    Default: ''
+
+Conditions:
+  HasCustomDocumentBucketName: !Not [!Equals [!Ref DocumentBucketName, '']]
+
+Resources:
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If [HasCustomDocumentBucketName, !Ref DocumentBucketName, !Ref AWS::NoValue]
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: App
+          Value: TeamBoard
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AuditEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      Tags:
+        - Key: App
+          Value: TeamBoard
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  TeamBoardCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub teamboard-${EnvironmentName}
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: App
+          Value: TeamBoard
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  GatewayRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub teamboard/${EnvironmentName}/gateway
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  AuthRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub teamboard/${EnvironmentName}/auth-service
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  ProjectsRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub teamboard/${EnvironmentName}/projects-service
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  TasksRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub teamboard/${EnvironmentName}/tasks-service
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  DocumentsRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub teamboard/${EnvironmentName}/documents-service
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  AiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub teamboard/${EnvironmentName}/ai-service
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+Outputs:
+  DocumentBucketName:
+    Value: !Ref DocumentBucket
+  AuditEventsTableName:
+    Value: !Ref AuditEventsTable
+  EcsClusterName:
+    Value: !Ref TeamBoardCluster

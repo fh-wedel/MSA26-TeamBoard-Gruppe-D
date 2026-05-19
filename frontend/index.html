@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TeamBoard</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>TeamBoard</h1>
+    <div id="service-health" class="service-health">Checking services...</div>
+    <div id="user-bar"></div>
+  </header>
+
+  <main>
+    <!-- Auth view -->
+    <section id="auth-view" class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Login</button>
+        <button class="tab" data-tab="register">Register</button>
+      </div>
+
+      <form id="login-form" class="form">
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Password <input type="password" name="password" required /></label>
+        <button type="submit">Log in</button>
+      </form>
+
+      <form id="register-form" class="form hidden">
+        <label>Display name <input type="text" name="display_name" required /></label>
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Password <input type="password" name="password" minlength="6" required /></label>
+        <button type="submit">Create account</button>
+      </form>
+
+      <p id="auth-error" class="error"></p>
+    </section>
+
+    <!-- App view -->
+    <section id="app-view" class="hidden">
+      <aside id="sidebar">
+        <h2>Projects</h2>
+        <ul id="project-list"></ul>
+        <form id="new-project-form" class="form inline">
+          <input type="text" name="name" placeholder="New project name" required />
+          <input type="text" name="description" placeholder="Short description" />
+          <button type="submit">+ Create</button>
+        </form>
+      </aside>
+
+      <section id="content">
+        <div id="project-view" class="hidden">
+          <section class="project-hero">
+            <div>
+              <p class="eyebrow">Workspace</p>
+              <h2 id="project-title"></h2>
+              <p id="project-description" class="muted"></p>
+            </div>
+            <div id="project-stats" class="stats-grid"></div>
+          </section>
+
+          <section id="ai-panel" class="ai-panel">
+            <div class="ai-panel-header">
+              <div>
+                <h3>AI Project Assistant</h3>
+                <p class="muted">Summarizes boards, tasks, comments and document metadata via AWS Bedrock.</p>
+              </div>
+              <button id="generate-summary-btn" type="button">Generate summary</button>
+            </div>
+            <textarea id="ai-focus" placeholder="Optional focus, e.g. risks before next release"></textarea>
+            <div id="ai-summary-result" class="ai-result muted">No summary generated yet.</div>
+          </section>
+
+          <div class="dashboard-grid">
+            <section class="panel">
+              <h3>Boards</h3>
+              <div id="board-list" class="board-grid"></div>
+              <form id="new-board-form" class="form inline">
+                <input type="text" name="name" placeholder="New board name" required />
+                <button type="submit">+ Board</button>
+              </form>
+            </section>
+            <section class="panel">
+              <h3>Documents</h3>
+              <div id="document-list" class="document-list"></div>
+              <form id="upload-form" class="form inline">
+                <input type="file" name="file" required />
+                <button type="submit">Upload</button>
+              </form>
+            </section>
+            <section class="panel">
+              <h3>Members</h3>
+              <div id="member-list" class="member-list"></div>
+              <form id="member-form" class="form inline">
+                <input type="text" name="user_id" placeholder="User UUID" required />
+                <select name="role">
+                  <option value="member">member</option>
+                  <option value="owner">owner</option>
+                </select>
+                <button type="submit">Invite</button>
+              </form>
+            </section>
+          </div>
+
+          <section class="panel activity-panel">
+            <h3>Recent activity</h3>
+            <div id="activity-list" class="activity-list"></div>
+          </section>
+
+          <div id="board-view" class="hidden">
+            <div class="board-toolbar">
+              <div>
+                <p class="eyebrow">Kanban board</p>
+                <h3 id="board-title"></h3>
+              </div>
+              <div class="board-filters">
+                <input id="task-search" type="search" placeholder="Search tasks..." />
+                <select id="task-assignee-filter">
+                  <option value="">All assignees</option>
+                </select>
+                <select id="task-status-filter">
+                  <option value="">All statuses</option>
+                </select>
+                <select id="task-sprint-filter">
+                  <option value="">All sprints</option>
+                </select>
+              </div>
+            </div>
+            <div id="kanban"></div>
+          </div>
+        </div>
+        <p id="empty-hint" class="muted">Select or create a project to get started.</p>
+      </section>
+    </section>
+  </main>
+
+  <!-- Task detail modal -->
+  <div id="task-modal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close" data-close>&times;</button>
+      <h3 id="task-modal-title"></h3>
+      <p id="task-modal-meta" class="muted"></p>
+      <form id="task-edit-form" class="form task-edit-form">
+        <label>Title <input type="text" name="title" required /></label>
+        <label>Description <textarea name="description" placeholder="Describe the work..."></textarea></label>
+        <label>Status <select name="status_column_id"></select></label>
+        <label>Due date <input type="date" name="due_date" /></label>
+        <label>Sprint <input type="text" name="sprint" maxlength="64" placeholder="Sprint 1" /></label>
+        <label>Assignee <select name="assignee_id"></select></label>
+        <div class="modal-actions">
+          <button type="submit">Save task</button>
+          <button id="delete-task-btn" type="button" class="danger">Delete</button>
+        </div>
+      </form>
+      <h4>Comments</h4>
+      <ul id="comment-list"></ul>
+      <form id="comment-form" class="form">
+        <textarea name="body" placeholder="Add a comment..." required></textarea>
+        <button type="submit">Comment</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

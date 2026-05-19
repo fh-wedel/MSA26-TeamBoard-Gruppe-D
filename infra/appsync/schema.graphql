@@ -1,0 +1,25 @@
+type ProjectEvent {
+  projectId: ID!
+  type: String!
+  message: String!
+  createdAt: AWSDateTime!
+}
+
+type Query {
+  health: String!
+}
+
+type Mutation {
+  publishProjectEvent(projectId: ID!, type: String!, message: String!): ProjectEvent!
+}
+
+type Subscription {
+  onProjectEvent(projectId: ID!): ProjectEvent
+    @aws_subscribe(mutations: ["publishProjectEvent"])
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}

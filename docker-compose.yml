@@ -1,0 +1,129 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-teamboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-teamboard}
+      POSTGRES_DB: ${POSTGRES_DB:-teamboard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-teamboard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  auth-service:
+    build: ./services/auth
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-teamboard}:${POSTGRES_PASSWORD:-teamboard}@postgres:5432/${POSTGRES_DB:-teamboard}
+      DB_SCHEMA: auth
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES:-1440}
+      ROOT_PATH: /api/auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  projects-service:
+    build: ./services/projects
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-teamboard}:${POSTGRES_PASSWORD:-teamboard}@postgres:5432/${POSTGRES_DB:-teamboard}
+      DB_SCHEMA: projects
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      AUTH_SERVICE_URL: http://auth-service:8000
+      ROOT_PATH: /api/projects
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  tasks-service:
+    build: ./services/tasks
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-teamboard}:${POSTGRES_PASSWORD:-teamboard}@postgres:5432/${POSTGRES_DB:-teamboard}
+      DB_SCHEMA: tasks
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      PROJECTS_SERVICE_URL: http://projects-service:8000
+      ROOT_PATH: /api/tasks
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  documents-service:
+    build: ./services/documents
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-teamboard}:${POSTGRES_PASSWORD:-teamboard}@postgres:5432/${POSTGRES_DB:-teamboard}
+      DB_SCHEMA: documents
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      PROJECTS_SERVICE_URL: http://projects-service:8000
+      DOCUMENT_STORAGE_BACKEND: ${DOCUMENT_STORAGE_BACKEND:-local}
+      DOCUMENT_STORAGE_DIR: /data/documents
+      DOCUMENT_S3_BUCKET: ${DOCUMENT_S3_BUCKET:-}
+      DOCUMENT_S3_PREFIX: ${DOCUMENT_S3_PREFIX:-teamboard/documents}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      AWS_PROFILE_NAME: ${AWS_PROFILE_NAME:-}
+      ROOT_PATH: /api/documents
+    volumes:
+      - ./data/documents:/data/documents
+      - ${USERPROFILE:-~}/.aws:/root/.aws:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-service:
+    build: ./services/ai
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ROOT_PATH: /api/ai
+      PROJECTS_SERVICE_URL: http://projects-service:8000
+      TASKS_SERVICE_URL: http://tasks-service:8000
+      DOCUMENTS_SERVICE_URL: http://documents-service:8000
+      AI_PROVIDER: ${AI_PROVIDER:-bedrock}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      AWS_PROFILE_NAME: ${AWS_PROFILE_NAME:-}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-3-haiku-20240307-v1:0}
+      BEDROCK_MAX_TOKENS: ${BEDROCK_MAX_TOKENS:-1200}
+      BEDROCK_TEMPERATURE: ${BEDROCK_TEMPERATURE:-0.2}
+    volumes:
+      - ${USERPROFILE:-~}/.aws:/root/.aws:ro
+    depends_on:
+      - projects-service
+      - tasks-service
+      - documents-service
+
+  gateway:
+    build: ./services/gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      AUTH_SERVICE_URL: http://auth-service:8000
+      PROJECTS_SERVICE_URL: http://projects-service:8000
+      TASKS_SERVICE_URL: http://tasks-service:8000
+      DOCUMENTS_SERVICE_URL: http://documents-service:8000
+      AI_SERVICE_URL: http://ai-service:8000
+      AUDIT_LOG_BACKEND: ${AUDIT_LOG_BACKEND:-none}
+      AUDIT_DYNAMODB_TABLE: ${AUDIT_DYNAMODB_TABLE:-}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      AWS_PROFILE_NAME: ${AWS_PROFILE_NAME:-}
+    volumes:
+      - ./frontend:/app/frontend:ro
+      - ${USERPROFILE:-~}/.aws:/root/.aws:ro
+    ports:
+      - "${GATEWAY_PORT:-8080}:8000"
+    depends_on:
+      - auth-service
+      - projects-service
+      - tasks-service
+      - documents-service
+      - ai-service
+
+volumes:
+  postgres_data:
