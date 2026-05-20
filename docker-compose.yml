@@ -1,0 +1,137 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: poc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d poc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports:
+      - "8000:8000"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  core:
+    build:
+      context: ./services/core
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      CORE_PORT: "3000"
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS: redis
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/poc
+      PLUGIN_REGISTRY_TTL: "30"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  plugin-kanban:
+    build:
+      context: ./services/plugins/kanban
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      KANBAN_PORT: "3001"
+      NODE_ENV: development
+      LOG_LEVEL: info
+      EVENT_BUS: redis
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/poc
+      CORE_URL: http://core:3000
+      KANBAN_PLUGIN_ID: kanban-board
+      KANBAN_PLUGIN_VERSION: 1.0.0
+      KANBAN_PUBLIC_ENDPOINT: http://plugin-kanban:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      core:
+        condition: service_started
+
+  ws-broadcaster:
+    build:
+      context: ./lambdas/ws-broadcaster
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      BROADCASTER_PORT: "3002"
+      NODE_ENV: development
+      LOG_LEVEL: info
+      REDIS_URL: redis://redis:6379
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      CONNECTIONS_TABLE: ws-connections
+      AWS_REGION: eu-central-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    depends_on:
+      redis:
+        condition: service_healthy
+      dynamodb-local:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_CORE_URL: http://localhost:3000
+      VITE_BROADCASTER_URL: ws://localhost:3002
+      CORE_PROXY_TARGET: http://core:3000
+      BROADCASTER_PROXY_TARGET: ws://ws-broadcaster:3002
+    depends_on:
+      - core
+      - ws-broadcaster
+    volumes:
+      - ./services/frontend/src:/app/src
+      - ./services/frontend/index.html:/app/index.html
+      - ./services/frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./services/frontend/postcss.config.js:/app/postcss.config.js
+      - ./services/frontend/vite.config.ts:/app/vite.config.ts
+      - ./services/frontend/tsconfig.json:/app/tsconfig.json
+
+volumes:
+  pgdata:
+  miniodata:

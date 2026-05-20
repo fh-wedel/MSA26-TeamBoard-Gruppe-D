@@ -1,0 +1,42 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Resolve ECR registry hostname
+        id: ecr
+        run: |
+          aws_account=$(aws sts get-caller-identity --query Account --output text || true)
+          # We can't sts before configuring creds; fall back to secrets-provided value.
+          echo "registry=${{ secrets.ECR_REGISTRY }}" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/deploy-cdk-stack
+        with:
+          aws-role-arn: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          environment: staging
+          image-tag: ${{ github.sha }}
+          ecr-registry: ${{ secrets.ECR_REGISTRY }}

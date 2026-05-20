@@ -1,0 +1,14 @@
+# Copy to docker-compose.override.yml for local-only tweaks (not committed).
+# Use this for things like mounting source for live-reload, exposing extra ports,
+# or pinning images in air-gapped environments.
+
+services:
+  core:
+    volumes:
+      - ./services/core/src:/app/src
+    command: ["npm", "run", "dev"]
+
+  plugin-kanban:
+    volumes:
+      - ./services/plugins/kanban/src:/app/src
+    command: ["npm", "run", "dev"]

@@ -1,0 +1,66 @@
+name: Deploy CDK Stack
+description: |
+  Reusable composite action: builds and pushes service Docker images to ECR,
+  then runs `cdk deploy` for the given environment.
+inputs:
+  aws-role-arn:
+    description: ARN of the OIDC IAM role to assume
+    required: true
+  aws-region:
+    description: AWS region to deploy into
+    required: true
+  environment:
+    description: Logical environment (staging | production)
+    required: true
+  image-tag:
+    description: Tag to use for built/pushed Docker images (e.g. GITHUB_SHA, vX.Y.Z)
+    required: true
+  ecr-registry:
+    description: ECR registry hostname (account.dkr.ecr.region.amazonaws.com)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: ECR login
+      shell: bash
+      run: |
+        aws ecr get-login-password --region ${{ inputs.aws-region }} \
+          | docker login --username AWS --password-stdin ${{ inputs.ecr-registry }}
+
+    - name: Build & push Docker images
+      shell: bash
+      run: |
+        set -euo pipefail
+        for svc in core plugin-kanban ws-broadcaster; do
+          case "$svc" in
+            core) ctx=services/core ;;
+            plugin-kanban) ctx=services/plugins/kanban ;;
+            ws-broadcaster) ctx=lambdas/ws-broadcaster ;;
+          esac
+          # Ensure repository exists
+          aws ecr describe-repositories --repository-names "msa2/$svc" \
+            --region ${{ inputs.aws-region }} >/dev/null 2>&1 \
+            || aws ecr create-repository --repository-name "msa2/$svc" \
+                --region ${{ inputs.aws-region }} >/dev/null
+          docker build -t "${{ inputs.ecr-registry }}/msa2/$svc:${{ inputs.image-tag }}" "$ctx"
+          docker push "${{ inputs.ecr-registry }}/msa2/$svc:${{ inputs.image-tag }}"
+        done
+
+    - name: Install infra deps
+      shell: bash
+      working-directory: infrastructure
+      run: npm install --no-audit --no-fund
+
+    - name: cdk deploy --all
+      shell: bash
+      working-directory: infrastructure
+      run: |
+        npx cdk deploy --all --require-approval never \
+          -c environment=${{ inputs.environment }} \
+          -c imageTag=${{ inputs.image-tag }}

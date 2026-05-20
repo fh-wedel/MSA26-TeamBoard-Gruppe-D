@@ -1,0 +1,26 @@
+{
+  "name": "msa2-plugin-architecture-poc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plugin architecture PoC — modular cloud-native services on AWS",
+  "workspaces": [
+    "services/core",
+    "services/frontend",
+    "services/plugins/*",
+    "lambdas/*",
+    "infrastructure"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "synth": "npm --workspace infrastructure run synth"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

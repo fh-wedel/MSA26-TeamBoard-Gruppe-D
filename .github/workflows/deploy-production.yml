@@ -1,0 +1,38 @@
+name: Deploy Production
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Resolve version tag
+        id: tag
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/deploy-cdk-stack
+        with:
+          aws-role-arn: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          environment: production
+          image-tag: ${{ steps.tag.outputs.tag }}
+          ecr-registry: ${{ secrets.ECR_REGISTRY }}

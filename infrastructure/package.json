@@ -1,0 +1,29 @@
+{
+  "name": "@msa2/infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "msa2-cdk": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"no unit tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.158.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "aws-cdk": "^2.158.0",
+    "esbuild": "^0.21.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
