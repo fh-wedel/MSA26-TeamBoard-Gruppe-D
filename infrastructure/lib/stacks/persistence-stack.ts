@@ -25,7 +25,7 @@ export class PersistenceStack extends Stack {
     // Aurora Postgres Serverless v2
     this.aurora = new rds.DatabaseCluster(this, "Aurora", {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        version: rds.AuroraPostgresEngineVersion.VER_16_8,
       }),
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
