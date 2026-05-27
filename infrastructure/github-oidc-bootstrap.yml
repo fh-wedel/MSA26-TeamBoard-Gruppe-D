@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Bootstraps GitHub Actions OIDC trust + IAM deploy role for the
+  fh-wedel/MSA26-TeamBoard-Gruppe-D repository. Deploy this stack ONCE
+  per AWS account before running the Deploy Dev workflow.
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: fh-wedel
+    Description: GitHub organisation that owns the repo.
+  GitHubRepo:
+    Type: String
+    Default: MSA26-TeamBoard-Gruppe-D
+    Description: GitHub repository name.
+  DeployRoleName:
+    Type: String
+    Default: msa2-github-deploy-dev
+    Description: Name of the IAM role assumed by GitHub Actions.
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  DeployRoleDev:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref DeployRoleName
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/aws-test'
+                  - !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/dev/*'
+      ManagedPolicyArns:
+        # PoC scope: AdministratorAccess keeps CDK happy without hand-tuning
+        # 30+ service permissions. Tighten for production.
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  RoleArn:
+    Description: Put this into GitHub secret AWS_ROLE_ARN_DEV
+    Value: !GetAtt DeployRoleDev.Arn
+  EcrRegistry:
+    Description: Put this into GitHub secret ECR_REGISTRY
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com'
+  Region:
+    Description: Put this into GitHub secret AWS_REGION
+    Value: !Ref AWS::Region
+  AccountId:
+    Description: Your AWS account ID (handy reference)
+    Value: !Ref AWS::AccountId

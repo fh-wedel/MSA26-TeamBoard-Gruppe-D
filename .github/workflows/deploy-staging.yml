@@ -16,7 +16,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: staging
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
