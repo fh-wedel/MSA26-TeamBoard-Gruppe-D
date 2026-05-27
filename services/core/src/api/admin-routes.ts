@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Config } from "../lib/config";
 import { RedisPubSubBus } from "../eventbus/redis-bus";
 import type { EventBus, DomainEvent } from "../eventbus/types";
 
@@ -28,115 +29,125 @@ export interface ArchitectureGraph {
   edges: ArchitectureEdge[];
 }
 
-function buildArchitecture(): ArchitectureGraph {
+function buildArchitecture(config: Config): ArchitectureGraph {
   const broadcasterEndpoint =
     process.env.BROADCASTER_URL ?? "http://ws-broadcaster:3002";
-  return {
-    components: [
-      {
-        id: "client",
-        label: "Client (Browser)",
-        awsService: "—",
-        category: "client",
-        endpoint: null,
-        status: "static",
-        description: "User browser running the Vite + React frontend.",
-      },
-      {
-        id: "api-gateway-rest",
-        label: "API Gateway REST",
-        awsService: "API Gateway",
-        category: "edge",
-        endpoint: null,
-        status: "static",
-        description: "Public REST entry point in AWS. Locally bypassed; client calls Core directly.",
-      },
-      {
-        id: "api-gateway-ws",
-        label: "API Gateway WebSocket",
-        awsService: "API Gateway WebSocket API",
-        category: "edge",
-        endpoint: null,
-        status: "static",
-        description: "WebSocket entry point in AWS. Locally the WS Broadcaster serves /ws directly.",
-      },
-      {
-        id: "core",
-        label: "Core API",
-        awsService: "ECS Fargate",
-        category: "compute",
-        endpoint: "http://core:3000",
-        status: "running",
-        description: "Plugin registry, reverse proxy, event bus owner.",
-      },
-      {
-        id: "eventbridge",
-        label: "Event Bus",
-        awsService: "Amazon EventBridge (Redis Pub/Sub lokal)",
-        category: "messaging",
-        endpoint: null,
-        status: "running",
-        description: "Domain events flow through here. Local: Redis Pub/Sub channel events.global.",
-      },
-      {
-        id: "broadcaster",
-        label: "WebSocket Broadcaster",
-        awsService: "AWS Lambda",
-        category: "compute",
-        endpoint: broadcasterEndpoint,
-        status: "running",
-        description: "Fans out events to connected WebSocket clients.",
-      },
-      {
-        id: "rds",
-        label: "Primary DB",
-        awsService: "RDS PostgreSQL (Aurora Serverless v2)",
-        category: "persistence",
-        endpoint: "postgres:5432",
-        status: "running",
-        description: "Per-plugin schemas; kanban tickets live here.",
-      },
-      {
-        id: "redis",
-        label: "Cache / Registry",
-        awsService: "ElastiCache Redis",
-        category: "persistence",
-        endpoint: "redis:6379",
-        status: "running",
-        description: "Plugin registry storage and local Pub/Sub bus.",
-      },
-      {
-        id: "dynamodb",
-        label: "Connection State",
-        awsService: "DynamoDB",
-        category: "persistence",
-        endpoint: "dynamodb-local:8000",
-        status: "running",
-        description: "WebSocket connection lookup table.",
-      },
-      {
-        id: "s3",
-        label: "Blob Storage",
-        awsService: "S3 (MinIO lokal)",
-        category: "persistence",
-        endpoint: "minio:9000",
-        status: "running",
-        description: "Object storage for plugin attachments.",
-      },
-    ],
-    edges: [
-      { from: "client", to: "api-gateway-rest", label: "HTTPS" },
-      { from: "client", to: "api-gateway-ws", label: "WSS" },
-      { from: "api-gateway-rest", to: "core", label: "REST" },
-      { from: "api-gateway-ws", to: "broadcaster", label: "WS" },
-      { from: "core", to: "redis", label: "registry" },
-      { from: "core", to: "eventbridge", label: "publish/subscribe" },
-      { from: "eventbridge", to: "broadcaster", label: "ticket.*" },
-      { from: "broadcaster", to: "dynamodb", label: "lookup" },
-      { from: "broadcaster", to: "api-gateway-ws", label: "@connections" },
-      { from: "core", to: "rds", label: "metadata" },
-    ],
-  };
+  const usingDynamo = config.registryBackend === "dynamodb";
+  const usingEventBridge = config.eventBus === "eventbridge";
+
+  const components: ArchitectureComponent[] = [
+    {
+      id: "client",
+      label: "Client (Browser)",
+      awsService: "—",
+      category: "client",
+      endpoint: null,
+      status: "static",
+      description: "User browser running the Vite + React frontend.",
+    },
+    {
+      id: "api-gateway-rest",
+      label: "API Gateway REST",
+      awsService: "API Gateway",
+      category: "edge",
+      endpoint: null,
+      status: "static",
+      description: "Public REST entry point in AWS. Locally bypassed; client calls Core directly.",
+    },
+    {
+      id: "api-gateway-ws",
+      label: "API Gateway WebSocket",
+      awsService: "API Gateway WebSocket API",
+      category: "edge",
+      endpoint: null,
+      status: "static",
+      description: "WebSocket entry point in AWS. Locally the WS Broadcaster serves /ws directly.",
+    },
+    {
+      id: "core",
+      label: "Core API",
+      awsService: "ECS Fargate",
+      category: "compute",
+      endpoint: "http://core:3000",
+      status: "running",
+      description: "Plugin registry, reverse proxy, event bus owner.",
+    },
+    {
+      id: "eventbus",
+      label: "Event Bus",
+      awsService: usingEventBridge ? "Amazon EventBridge" : "Redis Pub/Sub (lokal)",
+      category: "messaging",
+      endpoint: null,
+      status: "running",
+      description: usingEventBridge
+        ? "Domain events on the msa2-bus event bus. Pub/Sub via EventBridge rules."
+        : "Local mode: Redis Pub/Sub channel events.global.",
+    },
+    {
+      id: "broadcaster",
+      label: "WebSocket Broadcaster",
+      awsService: "AWS Lambda",
+      category: "compute",
+      endpoint: broadcasterEndpoint,
+      status: "running",
+      description: "Fans out events to connected WebSocket clients.",
+    },
+    {
+      id: "registry-store",
+      label: "Plugin Registry",
+      awsService: usingDynamo ? "DynamoDB (TTL)" : "Redis (TTL)",
+      category: "persistence",
+      endpoint: usingDynamo ? null : "redis:6379",
+      status: "running",
+      description: usingDynamo
+        ? "DynamoDB table holds active plugin registrations; TTL attribute drops stale entries automatically."
+        : "Local mode: Redis stores registry entries with EX-based TTL.",
+    },
+    {
+      id: "tickets-store",
+      label: "Kanban Tickets",
+      awsService: usingDynamo ? "DynamoDB" : "PostgreSQL (lokal)",
+      category: "persistence",
+      endpoint: usingDynamo ? null : "postgres:5432",
+      status: "running",
+      description: usingDynamo
+        ? "DynamoDB table msa2-tickets, partition key pk=BOARD#<id>, sort key sk=TICKET#<uuid>."
+        : "Local mode: Postgres tickets table.",
+    },
+    {
+      id: "connections",
+      label: "Connection State",
+      awsService: "DynamoDB",
+      category: "persistence",
+      endpoint: usingDynamo ? null : "dynamodb-local:8000",
+      status: "running",
+      description: "WebSocket connection lookup table for the broadcaster.",
+    },
+    {
+      id: "s3",
+      label: "Blob Storage",
+      awsService: "S3 (MinIO lokal)",
+      category: "persistence",
+      endpoint: "minio:9000",
+      status: "running",
+      description: "Object storage for plugin attachments.",
+    },
+  ];
+
+  const edges: ArchitectureEdge[] = [
+    { from: "client", to: "api-gateway-rest", label: "HTTPS" },
+    { from: "client", to: "api-gateway-ws", label: "WSS" },
+    { from: "api-gateway-rest", to: "core", label: "REST" },
+    { from: "api-gateway-ws", to: "broadcaster", label: "WS" },
+    { from: "core", to: "registry-store", label: "register / heartbeat" },
+    { from: "core", to: "eventbus", label: "publish" },
+    { from: "eventbus", to: "broadcaster", label: "ticket.*" },
+    { from: "broadcaster", to: "connections", label: "lookup" },
+    { from: "broadcaster", to: "api-gateway-ws", label: "@connections" },
+    { from: "core", to: "tickets-store", label: "(via kanban proxy)" },
+  ];
+
+  return { components, edges };
 }
 
 interface SseEvent {
@@ -153,12 +164,17 @@ function isRedisBus(bus: EventBus): bus is RedisPubSubBus {
 export async function registerAdminRoutes(
   app: FastifyInstance,
   bus: EventBus,
+  config: Config,
 ): Promise<void> {
-  app.get("/api/admin/architecture", async () => buildArchitecture());
+  app.get("/api/admin/architecture", async () => buildArchitecture(config));
 
   app.get("/api/admin/events/stream", (request, reply) => {
     if (!isRedisBus(bus)) {
-      void reply.status(503).send({ error: "event_stream_not_available" });
+      void reply.status(503).send({
+        error: "event_stream_not_available",
+        reason:
+          "Live event SSE is only wired for the Redis bus. In AWS, events flow through EventBridge to Lambda — set up an EventBridge → Lambda relay to stream them back here.",
+      });
       return;
     }
 

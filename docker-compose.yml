@@ -54,12 +54,10 @@ services:
       NODE_ENV: development
       LOG_LEVEL: info
       EVENT_BUS: redis
+      REGISTRY_BACKEND: redis
       REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/poc
       PLUGIN_REGISTRY_TTL: "30"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -73,6 +71,7 @@ services:
       KANBAN_PORT: "3001"
       NODE_ENV: development
       LOG_LEVEL: info
+      STORAGE: postgres
       EVENT_BUS: redis
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/poc

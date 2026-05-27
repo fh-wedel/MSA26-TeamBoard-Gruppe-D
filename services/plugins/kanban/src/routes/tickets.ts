@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { EventBus } from "../events/bus";
-import type { CreateTicketInput, TicketRepository, UpdateTicketInput } from "../db/tickets";
+import type {
+  CreateTicketInput,
+  TicketRepository,
+  UpdateTicketInput,
+} from "../db/tickets";
 
 interface TicketIdParams {
   id: string;
@@ -49,9 +53,7 @@ export async function registerTicketRoutes(
   app.get<{ Params: TicketIdParams }>(
     "/tickets/:id",
     async (request, reply) => {
-      const id = Number(request.params.id);
-      if (Number.isNaN(id)) return reply.status(400).send({ error: "invalid_id" });
-      const ticket = await repo.get(id);
+      const ticket = await repo.get(request.params.id);
       if (!ticket) return reply.status(404).send({ error: "ticket_not_found" });
       return ticket;
     },
@@ -73,12 +75,10 @@ export async function registerTicketRoutes(
   app.put<{ Params: TicketIdParams }>(
     "/tickets/:id",
     async (request, reply) => {
-      const id = Number(request.params.id);
-      if (Number.isNaN(id)) return reply.status(400).send({ error: "invalid_id" });
       if (!isUpdateInput(request.body)) {
         return reply.status(400).send({ error: "invalid_payload" });
       }
-      const result = await repo.update(id, request.body);
+      const result = await repo.update(request.params.id, request.body);
       if (!result) return reply.status(404).send({ error: "ticket_not_found" });
       if (result.before.status !== result.after.status) {
         await bus.publish({
@@ -99,9 +99,7 @@ export async function registerTicketRoutes(
   app.delete<{ Params: TicketIdParams }>(
     "/tickets/:id",
     async (request, reply) => {
-      const id = Number(request.params.id);
-      if (Number.isNaN(id)) return reply.status(400).send({ error: "invalid_id" });
-      const removed = await repo.delete(id);
+      const removed = await repo.delete(request.params.id);
       if (!removed) return reply.status(404).send({ error: "ticket_not_found" });
       return reply.status(204).send();
     },

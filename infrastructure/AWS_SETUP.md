@@ -89,18 +89,32 @@ git push origin aws-test
 ```
 
 GitHub → Actions → Workflow **"2 · Deploy → AWS (dev)"** beobachten.
-Erster Lauf: **15–25 Min** (Aurora, ElastiCache, ECS Fargate werden erzeugt).
-Folge-Läufe: 3–8 Min (nur Image-Push + Service-Update).
+Erster Lauf (frisch): **~6–10 Min** für CDK (Persistence ist nur DynamoDB +
+S3 und ist in Sekunden fertig; die Zeit geht für VPC, ECS, ALB drauf) plus
+3–5 Min Docker-Build/Push. Folge-Läufe: ~3–5 Min — nur Image-Push und
+ECS Rolling Update.
 
-URL des deployten Frontends: in der AWS Console unter **EC2 → Load Balancers**
-oder im Output des `Msa2-Dev-Core` CloudFormation-Stacks.
+URL des deployten Backends: in der AWS Console unter **API Gateway → APIs →
+`msa2-core-api` → Stages → `prod` → Invoke URL**.
 
 ---
 
-## Aufräumen (wichtig: Kosten!)
+## Aufräumen (Kosten!)
 
-Aurora + ElastiCache + ALB laufen 24/7 und kosten zusammen **~7–12 €/Tag**.
-Wenn nicht aktiv getestet wird:
+Mit der DynamoDB-Architektur sind die laufenden Komponenten:
+
+| Komponente | Idle-Kosten/Monat |
+|---|---|
+| DynamoDB (Tickets, Plugin Registry, Connections) | ~0 € (pay-per-request, scale to zero) |
+| EventBridge Bus | ~0 € (pay per event published) |
+| ECS Fargate (Core + Kanban Container, je 0.5 vCPU / 1 GB) | ~17 € |
+| Application Load Balancer | ~22 € |
+| NAT Gateway (für ECR-Pulls aus VPC) | ~32 € |
+| API Gateway (REST + WebSocket) | ~0 € idle, ~$3.50 pro Mio Calls |
+| Lambda (Broadcaster) | ~0 € idle |
+| **Summe wenn 24/7 läuft** | **~70 €/Monat** |
+
+Wenn nicht aktiv getestet wird, alles wegräumen:
 
 ```bash
 # in CloudShell oder lokal mit Credentials
@@ -113,6 +127,11 @@ Was bleibt nach `destroy --all`:
 - `msa2-github-oidc`-Stack — kann bleiben, kostet nichts.
 - ECR-Repos mit Images — manuell löschen falls gewünscht (Console → ECR).
 
+Da DynamoDB pay-per-request ist und die ECS-Tasks erst nach dem Deploy
+laufen, kann man den Stack auch **nur über Nacht skalieren** statt destroy:
+ECS Services auf `desired-count=0` setzen. Spart Fargate-Kosten, lässt
+ALB/NAT laufen. Wieder hoch in ~2 Min ohne CDK-Wartezeit.
+
 ---
 
 ## Troubleshooting
@@ -123,3 +142,32 @@ Was bleibt nach `destroy --all`:
 | `No bootstrap stack found` während Deploy | Schritt 2 nicht gelaufen für den Account/Region. |
 | `Stack ... is in ROLLBACK_COMPLETE state and can not be updated` | Im Console-CloudFormation den Stack löschen, dann Workflow neu starten. |
 | ECR-Push-Fehler `repository does not exist` | Sollte nicht passieren — die Composite Action erzeugt fehlende Repos. Falls doch: Rolle hat keine `ecr:CreateRepository`-Permission (Trust ggf. zu eng). |
+
+---
+
+## Architektur-Notizen (für die Präsentation)
+
+Der AWS-Stack ist bewusst **Serverless-First für die Daten-Ebene**, behält
+aber **Container für die HTTP-Services**. Begründungen:
+
+- **DynamoDB für Tickets** statt RDS/Aurora: Zugriffsmuster sind key-value
+  ("alle Tickets von Board X", "ein einzelnes Ticket"). DynamoDB skaliert
+  zu 0, kostet idle nichts, kein Provisioning beim Deploy. Trade-off: keine
+  Volltextsuche, keine Cross-Board-Aggregationen.
+- **DynamoDB mit TTL für die Plugin Registry** statt Redis: das Heartbeat-
+  Pattern (alle 10 s schreiben, nach 30 s ohne Heartbeat ablaufen lassen)
+  ist genau das, was die `TimeToLive`-Attribut-Sweeperei in DynamoDB
+  nativ kann. Kein extra Datastore nötig.
+- **EventBridge statt Redis Pub/Sub**: AWS-natives Messaging, integriert
+  direkt mit Lambda (der Broadcaster bekommt Events als Trigger statt
+  polling-via-Subscription). Trade-off: ~1 s Latenz vs. µs.
+- **ECS Fargate behalten** für Core + Kanban: Fastify-HTTP-Services sind
+  langlaufend und stateful. Lambda würde gehen, hätte aber Cold-Starts
+  und 15-Min-Timeouts. Fargate ist hier "der richtige Container für
+  long-running APIs".
+
+Das Repository-Pattern (`TicketRepository` Interface mit `PostgresTicketRepository`
++ `DynamoTicketRepository`) erlaubt es uns, lokal mit `docker-compose`
+schnell zu iterieren (kein DynamoDB-Local nötig) und in AWS trotzdem die
+Serverless-Variante zu nutzen. Selbe Container-Images, nur Env-Vars
+unterscheiden sich.

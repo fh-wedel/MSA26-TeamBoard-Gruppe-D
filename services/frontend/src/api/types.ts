@@ -19,7 +19,7 @@ export interface PluginListResponse {
 export type TicketStatus = "todo" | "in-progress" | "done";
 
 export interface Ticket {
-  id: number;
+  id: string;
   boardId: number;
   title: string;
   description: string | null;

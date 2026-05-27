@@ -33,7 +33,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Ref DeployRoleName
-      MaxSessionDuration: 3600
+      MaxSessionDuration: 14400  # 4h — first deploys can be long (Aurora delete etc.)
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

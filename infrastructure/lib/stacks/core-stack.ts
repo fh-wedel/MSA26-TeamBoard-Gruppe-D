@@ -1,21 +1,16 @@
 import { Duration, Stack, StackProps } from "aws-cdk-lib";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as ecs_patterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as events from "aws-cdk-lib/aws-events";
 import * as logs from "aws-cdk-lib/aws-logs";
-import * as rds from "aws-cdk-lib/aws-rds";
-import * as elasticache from "aws-cdk-lib/aws-elasticache";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 
 export interface CoreStackProps extends StackProps {
   vpc: ec2.IVpc;
-  aurora: rds.DatabaseCluster;
-  redis: elasticache.CfnReplicationGroup;
-  redisSecurityGroup: ec2.SecurityGroup;
-  dbSecret: secretsmanager.ISecret;
+  pluginRegistryTable: dynamodb.ITable;
   imageTag: string;
   ecrRepositoryName?: string;
 }
@@ -44,9 +39,6 @@ export class CoreStack extends Stack {
         )
       : ecs.ContainerImage.fromAsset("../services/core");
 
-    const redisEndpoint = props.redis.attrPrimaryEndPointAddress;
-    const redisPort = props.redis.attrPrimaryEndPointPort;
-
     this.coreService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, "CoreService", {
       cluster: this.cluster,
       cpu: 512,
@@ -62,14 +54,9 @@ export class CoreStack extends Stack {
           EVENT_BUS: "eventbridge",
           EVENT_BUS_NAME: this.eventBus.eventBusName,
           AWS_REGION: this.region,
+          REGISTRY_BACKEND: "dynamodb",
+          PLUGIN_REGISTRY_TABLE: props.pluginRegistryTable.tableName,
           PLUGIN_REGISTRY_TTL: "30",
-          REDIS_URL: `redis://${redisEndpoint}:${redisPort}`,
-        },
-        secrets: {
-          DATABASE_URL: ecs.Secret.fromSecretsManager(
-            props.dbSecret,
-            "password",
-          ),
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: "core",
@@ -85,29 +72,9 @@ export class CoreStack extends Stack {
       healthyHttpCodes: "200",
     });
 
-    // Allow core service to talk to Redis (defined in this stack to avoid cycles)
-    new ec2.CfnSecurityGroupIngress(this, "RedisFromCoreIngress", {
-      groupId: props.redisSecurityGroup.securityGroupId,
-      ipProtocol: "tcp",
-      fromPort: 6379,
-      toPort: 6379,
-      sourceSecurityGroupId:
-        this.coreService.service.connections.securityGroups[0]!.securityGroupId,
-      description: "Core ECS service",
-    });
-
-    // Allow core service to talk to Aurora (same approach)
-    new ec2.CfnSecurityGroupIngress(this, "AuroraFromCoreIngress", {
-      groupId: props.aurora.connections.securityGroups[0]!.securityGroupId,
-      ipProtocol: "tcp",
-      fromPort: 5432,
-      toPort: 5432,
-      sourceSecurityGroupId:
-        this.coreService.service.connections.securityGroups[0]!.securityGroupId,
-      description: "Core ECS service",
-    });
-
-    // Grant put-events permission on event bus
+    props.pluginRegistryTable.grantReadWriteData(
+      this.coreService.taskDefinition.taskRole,
+    );
     this.eventBus.grantPutEventsTo(this.coreService.taskDefinition.taskRole);
 
     // REST API gateway in front of the ALB (HTTP proxy)

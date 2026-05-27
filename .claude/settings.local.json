@@ -8,7 +8,8 @@
       "Bash(npm --workspace services/frontend run build)",
       "Bash(docker compose *)",
       "Bash(curl -v -X POST http://localhost:3000/api/plugins/kanban-board/proxy/tickets -H 'content-type: application/json' -d '{\"boardId\": 1, \"title\": \"E2E test 3\", \"status\": \"todo\"}')",
-      "Bash(curl -s -X POST http://localhost:3000/api/plugins/kanban-board/proxy/tickets -H 'content-type: application/json' -d '{\"boardId\": 1, \"title\": \"Proxy fix test\", \"status\": \"todo\"}')"
+      "Bash(curl -s -X POST http://localhost:3000/api/plugins/kanban-board/proxy/tickets -H 'content-type: application/json' -d '{\"boardId\": 1, \"title\": \"Proxy fix test\", \"status\": \"todo\"}')",
+      "Bash(npm run *)"
     ]
   }
 }

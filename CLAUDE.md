@@ -17,7 +17,7 @@ are not obvious from the code alone.
 | Path | Purpose |
 |---|---|
 | `services/core/` | Fastify Core API on :3000. Plugin Registry, Reverse Proxy, Admin routes |
-| `services/plugins/kanban/` | Fastify Kanban plugin on :3001. Self-registers, persists tickets to Postgres |
+| `services/plugins/kanban/` | Fastify Kanban plugin on :3001. Self-registers; tickets in Postgres locally, DynamoDB in AWS |
 | `services/frontend/` | Vite + React + TS + Tailwind on :5173. Routes `/` (user kanban) and `/admin` (architecture dashboard) |
 | `lambdas/ws-broadcaster/` | Dual-mode: AWS Lambda handler (`handler.ts`) + local Fastify (`local.ts`) on :3002 |
 | `infrastructure/` | AWS CDK (TypeScript). 5 stacks: Network → Persistence → Core → Realtime/Kanban |
@@ -25,10 +25,11 @@ are not obvious from the code alone.
 
 ### Key files for common questions
 
-- Plugin registry logic: `services/core/src/registry/registry.ts`
+- Plugin registry interface + backends: `services/core/src/registry/registry.ts` (interface + `RedisPluginRegistry`), `services/core/src/registry/dynamo-registry.ts` (`DynamoPluginRegistry`), `services/core/src/registry/factory.ts` (selection)
 - Reverse proxy (buffers bodies — see gotcha #2): `services/core/src/proxy/proxy.ts`
-- Event bus abstraction: `services/core/src/eventbus/` (`RedisPubSubBus` local, `EventBridgeBus` AWS)
+- Event bus abstraction: `services/core/src/eventbus/` (`RedisPubSubBus` local, `EventBridgeBus` AWS, factory.ts picks)
 - Admin SSE + architecture endpoint: `services/core/src/api/admin-routes.ts`
+- Kanban ticket store: `services/plugins/kanban/src/db/tickets.ts` (interface + `PostgresTicketRepository`), `services/plugins/kanban/src/db/tickets-dynamo.ts` (`DynamoTicketRepository`), `services/plugins/kanban/src/db/factory.ts`
 - Kanban self-registration & heartbeat: `services/plugins/kanban/src/registry-client.ts`
 - WS broadcaster local mode: `lambdas/ws-broadcaster/src/local.ts`
 - CDK entry: `infrastructure/bin/app.ts`
@@ -37,7 +38,8 @@ are not obvious from the code alone.
 ## Tech stack
 
 TypeScript strict everywhere. Node 20.
-Backend: Fastify, ioredis, pg, undici, pino, @fastify/cors, @fastify/websocket.
+Backend: Fastify, ioredis (local), pg (local), undici, pino, @fastify/cors, @fastify/websocket.
+AWS data path: `@aws-sdk/client-dynamodb` + `@aws-sdk/lib-dynamodb`, `@aws-sdk/client-eventbridge`.
 Frontend: React 18, react-router v6, @dnd-kit/core, reactflow, Tailwind.
 AWS SDK v3, AWS CDK (TypeScript), esbuild for Lambda bundling.
 
@@ -107,9 +109,12 @@ production deploys on `v*.*.*` tags. Requires:
    (`http://localhost:3000`). Inside a container, `localhost` is the container
    itself — using it as proxy target produces `ECONNREFUSED 127.0.0.1:3000`.
 
-4. **CDK security-group ingress rules live in consumer stacks** (Core,
-   Kanban), not the producer (Persistence). Producer-side placement creates
-   Network → Persistence → Core → Persistence dependency cycles.
+4. **CDK security-group ingress rules used to live in consumer stacks**
+   (Core, Kanban) — producer-side placement created Network → Persistence →
+   Core → Persistence dependency cycles. With Aurora/ElastiCache removed,
+   no SG ingress is needed anymore (DynamoDB/EventBridge are accessed via
+   IAM, not network ACLs). Re-introducing VPC-bound stores would mean
+   re-applying this rule.
 
 5. **Lambda bundling uses esbuild** (devDep in `infrastructure/`). Don't
    remove it — CDK silently falls back to Docker bundling, which slows synth
@@ -117,8 +122,10 @@ production deploys on `v*.*.*` tags. Requires:
 
 6. **Event-bus `tap(handler)` is implementation-only**, not on the `EventBus`
    interface. It exists only on `RedisPubSubBus` (uses `PSUBSCRIBE plugin.*`)
-   and powers the admin SSE stream. If you add a new bus implementation and
-   need admin live-events, add `tap` there too.
+   and powers the admin SSE stream. **In AWS the SSE endpoint returns 503**:
+   events flow `EventBridge → Lambda` and don't loop back to Core. To support
+   live admin events in AWS you'd need an `EventBridge → Lambda → Core` relay
+   (e.g. via WebSocket from the Lambda). Out of scope for the PoC.
 
 7. **Plugin registration carries optional UI metadata** (`runtime`,
    `awsService`, `description`). The admin graph uses these. New plugins
@@ -127,6 +134,18 @@ production deploys on `v*.*.*` tags. Requires:
 8. **Frontend env split:** `VITE_*` vars are inlined into the browser
    bundle (public). `CORE_PROXY_TARGET`/`BROADCASTER_PROXY_TARGET` go only to
    the Vite dev server (never reach the browser). Don't confuse the two.
+
+9. **Storage abstraction via env flags.** Services pick their persistence
+   backend at startup from env vars — not bundled per-build. The Kanban
+   plugin reads `STORAGE=postgres|dynamodb`, Core reads
+   `REGISTRY_BACKEND=redis|dynamodb` and `EVENT_BUS=redis|eventbridge`.
+   Local docker-compose pins all three to the Redis/Postgres options;
+   the AWS CDK stacks pin them to DynamoDB/EventBridge. Same container
+   image runs in both environments.
+
+10. **Ticket IDs are strings, not numbers.** DynamoDB has no SERIAL — IDs
+    are UUIDs in AWS, numeric strings ("42") in Postgres. The API surface
+    (`Ticket.id`) is always `string`. Frontend already typed accordingly.
 
 ## Common failure modes
 

@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 
 export interface Ticket {
-  id: number;
+  id: string;
   boardId: number;
   title: string;
   description: string;
@@ -9,30 +9,6 @@ export interface Ticket {
   position: number;
   createdAt: string;
   updatedAt: string;
-}
-
-interface TicketRow {
-  id: number;
-  board_id: number;
-  title: string;
-  description: string;
-  status: string;
-  position: number;
-  created_at: Date;
-  updated_at: Date;
-}
-
-function mapRow(row: TicketRow): Ticket {
-  return {
-    id: row.id,
-    boardId: row.board_id,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    position: row.position,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
-  };
 }
 
 export interface CreateTicketInput {
@@ -51,7 +27,42 @@ export interface UpdateTicketInput {
   boardId?: number;
 }
 
-export class TicketRepository {
+export interface TicketRepository {
+  list(boardId?: number): Promise<Ticket[]>;
+  get(id: string): Promise<Ticket | null>;
+  create(input: CreateTicketInput): Promise<Ticket>;
+  update(
+    id: string,
+    input: UpdateTicketInput,
+  ): Promise<{ before: Ticket; after: Ticket } | null>;
+  delete(id: string): Promise<boolean>;
+}
+
+interface TicketRow {
+  id: number;
+  board_id: number;
+  title: string;
+  description: string;
+  status: string;
+  position: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+function mapRow(row: TicketRow): Ticket {
+  return {
+    id: String(row.id),
+    boardId: row.board_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    position: row.position,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+export class PostgresTicketRepository implements TicketRepository {
   constructor(private readonly pool: Pool) {}
 
   async list(boardId?: number): Promise<Ticket[]> {
@@ -68,10 +79,12 @@ export class TicketRepository {
     return rows.map(mapRow);
   }
 
-  async get(id: number): Promise<Ticket | null> {
+  async get(id: string): Promise<Ticket | null> {
+    const numeric = Number(id);
+    if (!Number.isInteger(numeric)) return null;
     const { rows } = await this.pool.query<TicketRow>(
       "SELECT * FROM tickets WHERE id = $1",
-      [id],
+      [numeric],
     );
     if (rows.length === 0) return null;
     return mapRow(rows[0]!);
@@ -94,11 +107,12 @@ export class TicketRepository {
   }
 
   async update(
-    id: number,
+    id: string,
     input: UpdateTicketInput,
   ): Promise<{ before: Ticket; after: Ticket } | null> {
     const before = await this.get(id);
     if (!before) return null;
+    const numeric = Number(id);
     const next = {
       title: input.title ?? before.title,
       description: input.description ?? before.description,
@@ -109,13 +123,15 @@ export class TicketRepository {
     const { rows } = await this.pool.query<TicketRow>(
       `UPDATE tickets SET title=$1, description=$2, status=$3, position=$4, board_id=$5, updated_at=now()
        WHERE id=$6 RETURNING *`,
-      [next.title, next.description, next.status, next.position, next.boardId, id],
+      [next.title, next.description, next.status, next.position, next.boardId, numeric],
     );
     return { before, after: mapRow(rows[0]!) };
   }
 
-  async delete(id: number): Promise<boolean> {
-    const { rowCount } = await this.pool.query("DELETE FROM tickets WHERE id = $1", [id]);
+  async delete(id: string): Promise<boolean> {
+    const numeric = Number(id);
+    if (!Number.isInteger(numeric)) return false;
+    const { rowCount } = await this.pool.query("DELETE FROM tickets WHERE id = $1", [numeric]);
     return (rowCount ?? 0) > 0;
   }
 }

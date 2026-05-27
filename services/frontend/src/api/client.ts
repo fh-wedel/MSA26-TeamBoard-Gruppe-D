@@ -43,7 +43,7 @@ export const api = {
     }),
 
   updateTicket: (
-    id: number,
+    id: string,
     patch: Partial<Pick<Ticket, "status" | "title" | "description" | "position" | "boardId">>,
   ): Promise<Ticket> =>
     jsonRequest(`/api/plugins/kanban-board/proxy/tickets/${id}`, {
@@ -51,7 +51,7 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
-  deleteTicket: (id: number): Promise<void> =>
+  deleteTicket: (id: string): Promise<void> =>
     jsonRequest(`/api/plugins/kanban-board/proxy/tickets/${id}`, { method: "DELETE" }),
 
   getArchitecture: (): Promise<ArchitectureGraph> => jsonRequest("/api/admin/architecture"),

@@ -1,41 +1,23 @@
 import Fastify from "fastify";
 import Redis from "ioredis";
-import { Pool } from "pg";
 import { loadConfig } from "./config";
-import { runMigrations } from "./db/schema";
-import { TicketRepository } from "./db/tickets";
+import { buildTicketRepository } from "./db/factory";
 import { createEventBus } from "./events/bus";
 import { logger } from "./logger";
 import { RegistryClient } from "./registry-client";
 import { registerTicketRoutes } from "./routes/tickets";
 
-async function waitForDb(pool: Pool, attempts = 30): Promise<void> {
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      await pool.query("SELECT 1");
-      return;
-    } catch (err) {
-      logger.warn(
-        { attempt: i, err: (err as Error).message },
-        "waiting for postgres",
-      );
-      await new Promise((r) => setTimeout(r, Math.min(1000 * i, 3000)));
-    }
-  }
-  throw new Error("postgres unreachable");
-}
-
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  const pool = new Pool({ connectionString: config.databaseUrl });
-  await waitForDb(pool);
-  await runMigrations(pool);
+  const { repo, close: closeRepo } = await buildTicketRepository(config);
 
-  const redis = new Redis(config.redisUrl, { lazyConnect: false, maxRetriesPerRequest: null });
-  redis.on("error", (err) => logger.error({ err }, "redis error"));
+  const redis =
+    config.eventBus === "redis"
+      ? new Redis(config.redisUrl, { lazyConnect: false, maxRetriesPerRequest: null })
+      : null;
+  redis?.on("error", (err) => logger.error({ err }, "redis error"));
 
-  const repo = new TicketRepository(pool);
   const bus = createEventBus(config, redis);
 
   const isDev = process.env.NODE_ENV !== "production";
@@ -59,16 +41,20 @@ async function main(): Promise<void> {
     status: "ok",
     pluginId: config.pluginId,
     version: config.pluginVersion,
+    storage: config.storage,
+    eventBus: config.eventBus,
     uptimeSeconds: Math.round(process.uptime()),
   }));
 
   await registerTicketRoutes(app, repo, bus, config.pluginId);
 
   await app.listen({ port: config.port, host: "0.0.0.0" });
-  logger.info({ port: config.port }, "kanban plugin ready");
+  logger.info(
+    { port: config.port, storage: config.storage, eventBus: config.eventBus },
+    "kanban plugin ready",
+  );
 
   const registry = new RegistryClient(config);
-  // Fire and forget — service stays up even if registration is slow.
   registry.startWithRetry().catch((err) =>
     logger.error({ err }, "fatal registration failure"),
   );
@@ -79,8 +65,8 @@ async function main(): Promise<void> {
       await registry.deregister();
       await app.close();
       await bus.close();
-      await redis.quit();
-      await pool.end();
+      if (redis) await redis.quit();
+      await closeRepo();
     } catch (err) {
       logger.error({ err }, "error during shutdown");
     } finally {

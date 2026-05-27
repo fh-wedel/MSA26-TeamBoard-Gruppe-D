@@ -1,10 +1,18 @@
 import type { Redis } from "ioredis";
 import type { PluginRegistration, RegisteredPlugin } from "./types";
 
+export interface PluginRegistry {
+  register(reg: PluginRegistration): Promise<RegisteredPlugin>;
+  heartbeat(pluginId: string): Promise<RegisteredPlugin | null>;
+  deregister(pluginId: string): Promise<boolean>;
+  get(pluginId: string): Promise<RegisteredPlugin | null>;
+  list(): Promise<RegisteredPlugin[]>;
+}
+
 const REGISTRY_KEY_PREFIX = "plugin:registry:";
 const REGISTRY_SET_KEY = "plugin:registry:index";
 
-export class PluginRegistry {
+export class RedisPluginRegistry implements PluginRegistry {
   constructor(
     private readonly redis: Redis,
     private readonly ttlSeconds: number,

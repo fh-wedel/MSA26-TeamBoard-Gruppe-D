@@ -55,9 +55,12 @@ class EventBridgeBus implements EventBus {
   }
 }
 
-export function createEventBus(config: KanbanConfig, redis: Redis): EventBus {
+export function createEventBus(config: KanbanConfig, redis: Redis | null): EventBus {
   if (config.eventBus === "eventbridge") {
     return new EventBridgeBus(config.eventBusName, config.awsRegion);
+  }
+  if (!redis) {
+    throw new Error("EVENT_BUS=redis but no Redis client provided");
   }
   return new RedisBus(redis);
 }

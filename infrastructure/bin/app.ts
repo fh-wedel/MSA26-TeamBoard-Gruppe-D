@@ -20,21 +20,16 @@ const prefix = `Msa2-${capitalize(environment)}`;
 
 const network = new NetworkStack(app, `${prefix}-Network`, { env });
 
-const persistence = new PersistenceStack(app, `${prefix}-Persistence`, {
-  env,
-  vpc: network.vpc,
-});
-persistence.addDependency(network);
+// DynamoDB + S3 — no VPC needed for the persistence layer anymore.
+const persistence = new PersistenceStack(app, `${prefix}-Persistence`, { env });
 
 const core = new CoreStack(app, `${prefix}-Core`, {
   env,
   vpc: network.vpc,
-  aurora: persistence.aurora,
-  redis: persistence.redis,
-  redisSecurityGroup: persistence.redisSecurityGroup,
-  dbSecret: persistence.dbSecret,
+  pluginRegistryTable: persistence.pluginRegistryTable,
   imageTag,
 });
+core.addDependency(network);
 core.addDependency(persistence);
 
 const realtime = new RealtimeStack(app, `${prefix}-Realtime`, {
@@ -48,10 +43,7 @@ const kanban = new KanbanStack(app, `${prefix}-PluginKanban`, {
   env,
   cluster: core.cluster,
   vpc: network.vpc,
-  aurora: persistence.aurora,
-  redis: persistence.redis,
-  redisSecurityGroup: persistence.redisSecurityGroup,
-  dbSecret: persistence.dbSecret,
+  ticketsTable: persistence.ticketsTable,
   eventBus: core.eventBus,
   coreUrl: `http://${core.coreService.loadBalancer.loadBalancerDnsName}`,
   imageTag,

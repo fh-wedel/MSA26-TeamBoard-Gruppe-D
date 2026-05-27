@@ -67,7 +67,7 @@ function TicketCard({ ticket }: { ticket: Ticket }): JSX.Element {
         <div className="mt-1 text-xs text-slate-400 line-clamp-3">{ticket.description}</div>
       )}
       <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-        <span>#{ticket.id}</span>
+        <span>#{ticket.id.slice(0, 8)}</span>
         <span>board {ticket.boardId}</span>
       </div>
     </div>
@@ -190,7 +190,7 @@ export default function KanbanBoard(props: KanbanBoardProps): JSX.Element {
       const overId = e.over?.id;
       if (typeof overId !== "string" || !overId.startsWith("col:")) return;
       const newStatus = overId.slice("col:".length) as TicketStatus;
-      const data = e.active.data.current as { ticketId?: number; status?: TicketStatus } | undefined;
+      const data = e.active.data.current as { ticketId?: string; status?: TicketStatus } | undefined;
       if (!data?.ticketId || data.status === newStatus) return;
 
       // Optimistic update
