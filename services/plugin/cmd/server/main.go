@@ -1,0 +1,130 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/caarlos0/env/v10"
+	"github.com/jackc/pgx/v5/pgxpool"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/teamboard/services/plugin/internal/api"
+	"github.com/teamboard/services/plugin/internal/config"
+	"github.com/teamboard/services/plugin/internal/delivery"
+	"github.com/teamboard/services/plugin/internal/domain"
+	"github.com/teamboard/services/plugin/internal/events"
+	"github.com/teamboard/services/plugin/internal/projectclient"
+	"github.com/teamboard/services/plugin/internal/repository"
+)
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	var cfg config.Config
+	if err := env.Parse(&cfg); err != nil {
+		logger.Error("failed to load config", "err", err)
+		os.Exit(1)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Database
+	pool, err := pgxpool.New(ctx, cfg.DB.URL)
+	if err != nil {
+		logger.Error("failed to connect to database", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	// RabbitMQ
+	amqpConn, err := amqp.Dial(cfg.RabbitMQ.URL)
+	if err != nil {
+		logger.Error("failed to connect to rabbitmq", "err", err)
+		os.Exit(1)
+	}
+	defer amqpConn.Close()
+
+	// Wiring
+	repo := repository.New(pool)
+	permChecker := projectclient.New(
+		cfg.ProjectService.URL,
+		cfg.Security.ServiceTokenSecret,
+		cfg.ProjectService.Timeout,
+		cfg.ProjectService.PermissionCacheTTL,
+	)
+	webhookSvc := domain.NewWebhookService(
+		repo, permChecker,
+		cfg.Security.AllowInsecureHTTP,
+		cfg.Security.AllowPrivateURLs,
+		cfg.Security.AllowedPorts,
+	)
+	dispatcherSvc := domain.NewDispatcherService(repo)
+
+	// Delivery worker
+	httpClient := delivery.NewSSRFSafeClient(cfg.Delivery.HTTPConnectTimeout, cfg.Delivery.HTTPTotalTimeout)
+	breakerReg := delivery.NewBreakerRegistry(cfg.Breaker.ConsecutiveFailures, cfg.Breaker.Timeout)
+	worker := delivery.NewWorker(repo, httpClient, breakerReg, cfg.Delivery.UserAgent, logger)
+
+	// Event handlers
+	projHandler := events.NewProjectHandler(repo, logger)
+	userHandler := events.NewUserHandler(logger)
+	consumer := events.NewConsumer(
+		amqpConn,
+		cfg.RabbitMQ.Exchange,
+		cfg.RabbitMQ.ConsumerQueue,
+		cfg.RabbitMQ.BindingKeys,
+		dispatcherSvc,
+		projHandler,
+		userHandler,
+		logger,
+	)
+	publisher := events.NewPublisher(amqpConn, cfg.RabbitMQ.Exchange, repo, logger)
+
+	// HTTP server
+	router := api.NewRouter(webhookSvc, pool)
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Port),
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Start background goroutines
+	go func() {
+		if err := consumer.Run(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("consumer stopped", "err", err)
+		}
+	}()
+	go func() {
+		if err := publisher.Run(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("publisher stopped", "err", err)
+		}
+	}()
+	for i := 0; i < cfg.Delivery.WorkerCount; i++ {
+		go func() {
+			if err := worker.Run(ctx); err != nil && ctx.Err() == nil {
+				logger.Error("delivery worker stopped", "err", err)
+			}
+		}()
+	}
+
+	logger.Info("plugin service starting", "port", cfg.Port)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("http server error", "err", err)
+		}
+	}()
+
+	<-ctx.Done()
+	logger.Info("shutting down")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutCtx)
+}

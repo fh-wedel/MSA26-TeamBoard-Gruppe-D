@@ -1,0 +1,69 @@
+services:
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+      target: dev
+    volumes:
+      - ./services/auth:/workspace/services/auth
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
+  project:
+    build:
+      context: .
+      dockerfile: services/project/Dockerfile
+      target: dev
+    volumes:
+      - ./services/project:/workspace/services/project
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
+  task:
+    build:
+      context: .
+      dockerfile: services/task/Dockerfile
+      target: dev
+    volumes:
+      - ./services/task:/workspace/services/task
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
+  document:
+    build:
+      context: .
+      dockerfile: services/document/Dockerfile
+      target: dev
+    volumes:
+      - ./services/document:/workspace/services/document
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
+  notification:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
+      target: dev
+    volumes:
+      - ./services/notification:/workspace/services/notification
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
+  plugin:
+    build:
+      context: .
+      dockerfile: services/plugin/Dockerfile
+      target: dev
+    volumes:
+      - ./services/plugin:/workspace/services/plugin
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
+volumes:
+  go-mod-cache:

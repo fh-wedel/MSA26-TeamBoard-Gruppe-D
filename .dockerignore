@@ -1,0 +1,13 @@
+# Keep the build context lean when building from repo root
+.git
+.github
+docs/
+infra/cdk/
+frontend/node_modules
+frontend/dist
+**/tmp/
+**/*.test
+**/testdata/
+*.md
+.env
+.env.*

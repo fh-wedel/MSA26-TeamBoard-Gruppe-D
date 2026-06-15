@@ -1,0 +1,46 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+*.test
+*.out
+vendor/
+go.sum
+
+# Environment
+.env
+.env.local
+
+# Docker
+.docker/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Generated code (should be committed, but listed for clarity)
+# services/*/internal/repository/db/
+# services/*/internal/api/generated.go
+
+# Node / Frontend
+node_modules/
+dist/
+.next/
+frontend/.env.local
+
+# Coverage
+coverage.out
+coverage.html
+
+# Air (hot reload)
+tmp/
+
+# Logs
+*.log

@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS processed_events;
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS task_history;
+DROP TABLE IF EXISTS task_attachments;
+DROP TABLE IF EXISTS comment_history;
+DROP TABLE IF EXISTS comment_mentions;
+DROP TABLE IF EXISTS task_comments;
+DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS known_users;
+DROP TABLE IF EXISTS known_columns;
+DROP TABLE IF EXISTS known_boards;

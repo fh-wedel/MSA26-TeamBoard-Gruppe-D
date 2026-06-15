@@ -1,0 +1,130 @@
+package authmiddleware
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+
+	"github.com/teamboard/shared/go/httputil"
+)
+
+// Option configures the JWT middleware.
+type Option func(*middlewareConfig)
+
+type middlewareConfig struct {
+	issuer    string
+	audience  string
+	clockSkew time.Duration
+}
+
+// WithIssuer enforces a specific JWT issuer.
+func WithIssuer(iss string) Option {
+	return func(c *middlewareConfig) { c.issuer = iss }
+}
+
+// WithAudience enforces a specific JWT audience.
+func WithAudience(aud string) Option {
+	return func(c *middlewareConfig) { c.audience = aud }
+}
+
+// WithClockSkew sets tolerance for clock differences. Default: 30s.
+func WithClockSkew(skew time.Duration) Option {
+	return func(c *middlewareConfig) { c.clockSkew = skew }
+}
+
+// Middleware returns an HTTP middleware that validates Bearer JWTs and injects user info into context.
+func Middleware(jwks JWKSSource, opts ...Option) func(http.Handler) http.Handler {
+	cfg := &middlewareConfig{clockSkew: 30 * time.Second}
+	for _, o := range opts {
+		o(cfg)
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenStr := extractBearer(r.Header.Get("Authorization"))
+			if tokenStr == "" {
+				httputil.WriteProblem(w, r, http.StatusUnauthorized, "missing authorization header")
+				return
+			}
+
+			claims, err := parseToken(r.Context(), tokenStr, jwks, cfg)
+			if err != nil {
+				httputil.WriteProblem(w, r, http.StatusUnauthorized, "invalid or expired token")
+				return
+			}
+
+			sub, err := claims.GetSubject()
+			if err != nil {
+				httputil.WriteProblem(w, r, http.StatusUnauthorized, "missing subject claim")
+				return
+			}
+
+			uid, err := uuid.Parse(sub)
+			if err != nil {
+				httputil.WriteProblem(w, r, http.StatusUnauthorized, "invalid user id in token")
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), contextKeyUserID, uid)
+			if email, ok := claims["email"].(string); ok && email != "" {
+				ctx = context.WithValue(ctx, contextKeyEmail, email)
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func extractBearer(h string) string {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(h, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(h, prefix)
+}
+
+func parseToken(ctx context.Context, tokenStr string, jwks JWKSSource, cfg *middlewareConfig) (jwt.MapClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, jwt.MapClaims{}, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, jwt.ErrTokenSignatureInvalid
+		}
+		kid, _ := t.Header["kid"].(string)
+		return jwks.Key(ctx, kid)
+	},
+		jwt.WithLeeway(cfg.clockSkew),
+		jwt.WithExpirationRequired(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+
+	if cfg.issuer != "" {
+		iss, _ := claims.GetIssuer()
+		if iss != cfg.issuer {
+			return nil, jwt.ErrTokenInvalidIssuer
+		}
+	}
+	if cfg.audience != "" {
+		aud, _ := claims.GetAudience()
+		found := false
+		for _, a := range aud {
+			if a == cfg.audience {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, jwt.ErrTokenInvalidAudience
+		}
+	}
+
+	return claims, nil
+}

@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go test *)",
+      "Bash(go tool *)",
+      "Bash(go mod *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\henry\\\\Documents\\\\FHWedel\\\\Master\\\\software_architecture\\\\services\\\\auth\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\(\"C:\\\\Users\\\\henry\\\\Documents\\\\FHWedel\\\\Master\\\\software_architecture\\\\\", \"\"\\) })",
+      "PowerShell(Get-Content *)",
+      "Read(//mnt/c/Users/henry/Documents/FHWedel/Master/software_architecture/services/**)",
+      "Bash(Get-ChildItem *)",
+      "Bash(npm install *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell($path = $env:PATH -split ';'; $path)",
+      "PowerShell(docker run *)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)",
+      "Bash(docker compose *)",
+      "PowerShell(docker compose logs *)",
+      "Bash(npm run *)",
+      "Bash(curl -s \"http://localhost:8080/api/http/routers\")",
+      "Bash(python3 -c \"import json,sys; routers = json.load\\(sys.stdin\\); [print\\(r.get\\('name'\\), r.get\\('rule'\\)\\) for r in routers if 'task' in r.get\\('name',''\\).lower\\(\\) or 'project' in r.get\\('name',''\\).lower\\(\\)]\")",
+      "Bash(curl -s -X POST http://localhost/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"alice@teamboard.local\",\"password\":\"AliceSecret123!\"}')",
+      "Bash(docker exec teamboard-postgres-1 *)",
+      "Bash(python3 -c \"import json,sys; print\\(json.dumps\\(json.load\\(sys.stdin\\), indent=2\\)\\)\")",
+      "Bash(python3 *)",
+      "PowerShell(docker exec teamboard-postgres-1 *)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(xargs grep -l \"ws\\\\.\")",
+      "Bash(docker run *)"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS processed_events;
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS board_columns;
+DROP TABLE IF EXISTS boards;
+DROP TABLE IF EXISTS project_members;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS known_users;

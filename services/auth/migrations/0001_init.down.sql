@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS signing_keys;
+DROP TABLE IF EXISTS login_attempts;
+DROP TABLE IF EXISTS password_reset_tokens;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS users;
+DROP EXTENSION IF EXISTS citext;
