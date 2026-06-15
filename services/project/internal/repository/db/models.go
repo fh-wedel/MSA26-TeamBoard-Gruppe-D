@@ -52,6 +52,7 @@ type BoardColumn struct {
 	Name      string
 	Position  int
 	WIPLimit  *int
+	Status    string
 	CreatedAt time.Time
 }
 

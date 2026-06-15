@@ -3,7 +3,7 @@
         lint lint-fix build build-services build-frontend \
         shell-postgres shell-redis shell-rabbit urls wait-healthy
 
-SERVICES := auth project task document notification plugin
+SERVICES := auth project task document notification plugin boardregistry
 
 # Default target
 help:

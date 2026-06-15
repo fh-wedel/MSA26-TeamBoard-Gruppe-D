@@ -83,6 +83,11 @@ Ein abstrakter Output-Adapter, der Domain-Events in eine externe Aktion umsetzt.
 
 Die **Service-Struktur muss diese Erweiterung vorsehen**, ohne sie im MVP zu implementieren.
 
+> **Abgrenzung — Board-Typen gehören NICHT hierher:** Plugins in diesem Service sind ausschließlich
+> **Output-Adapter** (Event → externe Aktion). Die Erweiterbarkeit um neue **Board-Typen** ist ein
+> separates, strukturelles Konzept und liegt im dedizierten **Board-Registry-Service** (Port 8007,
+> siehe `docs/services/boardregistry.md`). Der Plugin/Webhook-Service bleibt Output-Adapter.
+
 ---
 
 ## 3. Use-Cases
@@ -1241,6 +1246,9 @@ components:
 ---
 
 ## 12. Plugin-Erweiterungspunkt
+
+> Dieser Erweiterungspunkt betrifft **Output-Adapter-Plugins** (slack, email, …). Board-Typen sind
+> hiervon getrennt und liegen im Board-Registry-Service (`docs/services/boardregistry.md`).
 
 ### 12.1 Plugin-Interface (Vorbereitung)
 

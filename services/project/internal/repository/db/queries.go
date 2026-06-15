@@ -246,16 +246,19 @@ func (q *queries) GetMaxBoardPosition(ctx context.Context, projectID uuid.UUID) 
 // ── Columns ───────────────────────────────────────────────────────────────────
 
 const createColumn = `
-INSERT INTO board_columns (id, board_id, name, position, wip_limit)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, board_id, name, position, wip_limit, created_at`
+INSERT INTO board_columns (id, board_id, name, position, wip_limit, status)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, board_id, name, position, wip_limit, status, created_at`
 
-func (q *queries) CreateColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int) (*BoardColumn, error) {
-	return scanColumn(q.db.QueryRow(ctx, createColumn, id, boardID, name, position, wipLimit))
+func (q *queries) CreateColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int, status string) (*BoardColumn, error) {
+	if status == "" {
+		status = "open"
+	}
+	return scanColumn(q.db.QueryRow(ctx, createColumn, id, boardID, name, position, wipLimit, status))
 }
 
 const listColumnsByBoard = `
-SELECT id, board_id, name, position, wip_limit, created_at
+SELECT id, board_id, name, position, wip_limit, status, created_at
 FROM board_columns WHERE board_id = $1 ORDER BY position`
 
 func (q *queries) ListColumnsByBoard(ctx context.Context, boardID uuid.UUID) ([]BoardColumn, error) {
@@ -407,7 +410,7 @@ func scanBoardRow(r pgx.Rows) (*Board, error) {
 
 func scanColumn(r pgx.Row) (*BoardColumn, error) {
 	c := &BoardColumn{}
-	err := r.Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.WIPLimit, &c.CreatedAt)
+	err := r.Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.WIPLimit, &c.Status, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pgx.ErrNoRows
 	}
@@ -416,7 +419,7 @@ func scanColumn(r pgx.Row) (*BoardColumn, error) {
 
 func scanColumnRow(r pgx.Rows) (BoardColumn, error) {
 	c := BoardColumn{}
-	err := r.Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.WIPLimit, &c.CreatedAt)
+	err := r.Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.WIPLimit, &c.Status, &c.CreatedAt)
 	return c, err
 }
 

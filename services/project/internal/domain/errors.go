@@ -29,6 +29,7 @@ var (
 	ErrUnknownUser        = &Error{Code: "unknown_user",         Message: "user not found in this service"}
 	ErrInvalidRole        = &Error{Code: "invalid_role",         Message: "invalid role"}
 	ErrInvalidBoardType   = &Error{Code: "invalid_board_type",   Message: "invalid board type"}
+	ErrBoardTypeRegistryUnavailable = &Error{Code: "board_type_registry_unavailable", Message: "board type registry is unavailable"}
 	ErrValidation         = &Error{Code: "validation_failed",    Message: "validation failed"}
 	ErrInvitationNotFound = &Error{Code: "invitation_not_found", Message: "invitation not found"}
 	ErrInvitationExpired  = &Error{Code: "invitation_expired",   Message: "invitation has expired"}

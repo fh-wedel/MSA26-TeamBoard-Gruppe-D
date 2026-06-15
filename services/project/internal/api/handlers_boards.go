@@ -6,23 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/teamboard/services/project/internal/boardplugins"
 	"github.com/teamboard/services/project/internal/domain"
 )
-
-func (h *Handlers) ListBoardTypes(w http.ResponseWriter, r *http.Request) {
-	type boardTypeItem struct {
-		ID          string `json:"id"`
-		DisplayName string `json:"name"`
-		Icon        string `json:"icon"`
-	}
-	plugins := boardplugins.List()
-	items := make([]boardTypeItem, len(plugins))
-	for i, p := range plugins {
-		items[i] = boardTypeItem{ID: p.Type, DisplayName: p.DisplayName, Icon: p.Icon}
-	}
-	writeJSON(w, http.StatusOK, items)
-}
 
 func (h *Handlers) CreateBoard(w http.ResponseWriter, r *http.Request) {
 	projectID, err := uuid.Parse(chi.URLParam(r, "projectID"))
@@ -39,7 +24,7 @@ func (h *Handlers) CreateBoard(w http.ResponseWriter, r *http.Request) {
 
 	cols := make([]domain.BoardColumnInput, len(req.Columns))
 	for i, c := range req.Columns {
-		cols[i] = domain.BoardColumnInput{Name: c.Name, Position: c.Position, WIPLimit: c.WIPLimit}
+		cols[i] = domain.BoardColumnInput{Name: c.Name, Position: c.Position, WIPLimit: c.WIPLimit, Status: c.Status}
 	}
 
 	board, err := h.svc.CreateBoard(r.Context(), projectID, mustUserID(r), domain.BoardInput{
@@ -163,6 +148,7 @@ func (h *Handlers) CreateColumn(w http.ResponseWriter, r *http.Request) {
 		Name:     req.Name,
 		Position: req.Position,
 		WIPLimit: req.WIPLimit,
+		Status:   req.Status,
 	})
 	if err != nil {
 		writeDomainError(w, r, err)

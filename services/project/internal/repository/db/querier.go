@@ -43,7 +43,7 @@ type Querier interface {
 	GetMaxBoardPosition(ctx context.Context, projectID uuid.UUID) (int, error)
 
 	// Columns
-	CreateColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int) (*BoardColumn, error)
+	CreateColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int, status string) (*BoardColumn, error)
 	ListColumnsByBoard(ctx context.Context, boardID uuid.UUID) ([]BoardColumn, error)
 
 	// Known users

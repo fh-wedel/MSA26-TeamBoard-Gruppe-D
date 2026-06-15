@@ -635,7 +635,14 @@ Bei einem Kanban-Board sind sie meistens deckungsgleich, aber:
 
 ### 6.2 Mapping-Strategie
 
-Beim Verschieben in eine Spalte wird der Status anhand des Spaltennamens abgeleitet (best-effort):
+> **Aktualisiert:** Jede Spalte trägt jetzt einen **expliziten `status`**, der aus der
+> Board-Typ-Definition stammt (Board-Registry-Service) und über `board.created`/`column.*`-Events
+> in `known_columns.status` gespeichert wird. `CreateTask` und Spalten-Moves verwenden diesen
+> expliziten Status (`statusForColumn`). Die untenstehende Namens-Heuristik (`DeriveStatus`) ist nur
+> noch **Fallback** für Spalten ohne gesetzten Status (Legacy-Daten). Damit funktionieren auch
+> Spalten mit beliebigen Namen (z. B. „Shipped“ → `done`) zuverlässig.
+
+Fallback — Ableitung anhand des Spaltennamens (best-effort), wenn kein expliziter Status vorliegt:
 
 ```go
 func deriveStatus(columnName string) Status {

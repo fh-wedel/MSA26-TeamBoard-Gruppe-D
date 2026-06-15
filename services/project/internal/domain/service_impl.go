@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/teamboard/services/project/internal/boardplugins"
 )
 
 type service struct {
-	repo  Repository
-	cache PermissionCache
+	repo       Repository
+	cache      PermissionCache
+	boardTypes BoardTypeRegistry
 }
 
 // NewProjectService constructs the domain service.
-func NewProjectService(repo Repository, cache PermissionCache) ProjectService {
-	return &service{repo: repo, cache: cache}
+func NewProjectService(repo Repository, cache PermissionCache, boardTypes BoardTypeRegistry) ProjectService {
+	return &service{repo: repo, cache: cache, boardTypes: boardTypes}
 }
 
 var _ ProjectService = (*service)(nil)
@@ -319,25 +319,33 @@ func (s *service) CreateBoard(ctx context.Context, projectID, requester uuid.UUI
 		return nil, err
 	}
 
-	plugin, ok := boardplugins.Get(string(input.Type))
-	if !ok {
-		return nil, ErrInvalidBoardType
+	// Resolve the board-type definition from the registry (returns
+	// ErrInvalidBoardType for unknown types, ErrBoardTypeRegistryUnavailable
+	// when the registry cannot be reached).
+	def, err := s.boardTypes.GetType(ctx, string(input.Type))
+	if err != nil {
+		return nil, err
 	}
 
-	// Merge config with defaults
-	cfg := plugin.DefaultConfig()
+	// Merge the requested config over the type defaults, then validate it
+	// against the type's JSON schema.
+	cfg := map[string]any{}
+	for k, v := range def.DefaultConfig {
+		cfg[k] = v
+	}
 	for k, v := range input.Config {
 		cfg[k] = v
 	}
-	if err := plugin.ValidateConfig(cfg); err != nil {
-		return nil, ErrValidation
+	if err := ValidateBoardConfig(def.ConfigSchema, cfg); err != nil {
+		return nil, err
 	}
 
-	// Use default columns if none specified; map plugin type to domain type
+	// Use the type's default columns (carrying their semantic status) when the
+	// caller did not specify columns.
 	cols := input.Columns
 	if len(cols) == 0 {
-		for _, c := range plugin.DefaultColumns() {
-			cols = append(cols, BoardColumnInput{Name: c.Name, Position: c.Position, WIPLimit: c.WIPLimit})
+		for _, c := range def.DefaultColumns {
+			cols = append(cols, BoardColumnInput{Name: c.Name, Position: c.Position, WIPLimit: c.WIPLimit, Status: c.Status})
 		}
 	}
 
@@ -356,7 +364,7 @@ func (s *service) CreateBoard(ctx context.Context, projectID, requester uuid.UUI
 		}
 
 		for _, col := range cols {
-			c, txErr := tx.CreateColumn(ctx, uuid.New(), board.ID, col.Name, col.Position, col.WIPLimit)
+			c, txErr := tx.CreateColumn(ctx, uuid.New(), board.ID, col.Name, col.Position, col.WIPLimit, col.Status)
 			if txErr != nil {
 				return txErr
 			}
@@ -367,10 +375,11 @@ func (s *service) CreateBoard(ctx context.Context, projectID, requester uuid.UUI
 			ID       string `json:"id"`
 			Name     string `json:"name"`
 			Position int    `json:"position"`
+			Status   string `json:"status"`
 		}
 		colEntries := make([]colEntry, len(board.Columns))
 		for i, c := range board.Columns {
-			colEntries[i] = colEntry{ID: c.ID.String(), Name: c.Name, Position: c.Position}
+			colEntries[i] = colEntry{ID: c.ID.String(), Name: c.Name, Position: c.Position, Status: c.Status}
 		}
 		payload, _ := json.Marshal(map[string]any{
 			"board_id":   board.ID,
@@ -477,7 +486,7 @@ func (s *service) CreateColumn(ctx context.Context, boardID, requester uuid.UUID
 	var col *BoardColumn
 	err = s.repo.WithTransaction(ctx, func(ctx context.Context, tx Repository) error {
 		var txErr error
-		col, txErr = tx.CreateColumn(ctx, uuid.New(), boardID, input.Name, input.Position, input.WIPLimit)
+		col, txErr = tx.CreateColumn(ctx, uuid.New(), boardID, input.Name, input.Position, input.WIPLimit, input.Status)
 		if txErr != nil {
 			return txErr
 		}
@@ -486,6 +495,7 @@ func (s *service) CreateColumn(ctx context.Context, boardID, requester uuid.UUID
 			"board_id":  boardID,
 			"name":      col.Name,
 			"position":  col.Position,
+			"status":    col.Status,
 		})
 		return tx.InsertOutboxEvent(ctx, uuid.New(), col.ID, "column.created", payload)
 	})

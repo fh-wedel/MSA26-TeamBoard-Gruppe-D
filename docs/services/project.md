@@ -1151,101 +1151,44 @@ Nicht im MVP. Eintrag wird beim ersten Lookup nach Cache-Miss erzeugt.
 
 ## 9. Board-Typen und Plugin-Hooks
 
-### 9.1 Strategy-Pattern
+> **Hinweis (Architektur-Evolution):** Board-Typen sind **keine compile-time Strategy mehr**.
+> Frühere Iterationen nutzten ein in-process Strategy-Pattern bzw. eine self-registering
+> `boardplugins`-Registry im Project-Service. Boardtyp-*Definitionen* sind jetzt **Laufzeit-Daten**
+> im dedizierten **Board-Registry-Service** (Port 8007, `boardregistry_db`). Details:
+> `docs/services/boardregistry.md` und ADR `docs/decisions/0001-board-type-extensibility.md`.
 
-```go
-package domain
+### 9.1 Laufzeit-Auflösung über die Board-Registry
 
-type BoardTypeStrategy interface {
-    DefaultColumns() []BoardColumnInput
-    DefaultConfig() map[string]any
-    ValidateConfig(config map[string]any) error
-}
+Beim Erstellen eines Boards (`CreateBoard`) löst der Project-Service den Typ zur Laufzeit auf:
 
-type kanbanStrategy struct{}
+1. `BoardTypeRegistry.GetType(ctx, type)` — Port in `internal/domain`, implementiert vom
+   `boardtypeclient` (HTTP gegen `GET /api/v1/internal/board-types/{type}` der Registry,
+   Service-Token-Auth, TTL-Cache).
+   - 404 → `ErrInvalidBoardType` (400 an den Client)
+   - Registry nicht erreichbar → `ErrBoardTypeRegistryUnavailable` (503)
+2. Aus der Definition kommen **Default-Columns** (inkl. `status`), **Default-Config** und ein
+   **JSON-Schema** für die Config.
+3. Die Board-Config wird gegen das JSON-Schema validiert (`ValidateBoardConfig`,
+   `santhosh-tekuri/jsonschema`).
+4. Default-Columns werden mit ihrem expliziten `status` persistiert und im `board.created`-Event
+   (Spalten-Array) bzw. `column.created/updated`-Event mitgesendet.
 
-func (kanbanStrategy) DefaultColumns() []BoardColumnInput {
-    return []BoardColumnInput{
-        {Name: "To Do", Position: 0},
-        {Name: "In Progress", Position: 1, WIPLimit: ptr(3)},
-        {Name: "Done", Position: 2},
-    }
-}
-
-func (kanbanStrategy) DefaultConfig() map[string]any {
-    return map[string]any{}
-}
-
-func (kanbanStrategy) ValidateConfig(c map[string]any) error {
-    return nil
-}
-
-type scrumStrategy struct{}
-
-func (scrumStrategy) DefaultColumns() []BoardColumnInput {
-    return []BoardColumnInput{
-        {Name: "Backlog", Position: 0},
-        {Name: "Sprint", Position: 1},
-        {Name: "In Progress", Position: 2},
-        {Name: "Review", Position: 3},
-        {Name: "Done", Position: 4},
-    }
-}
-
-func (scrumStrategy) DefaultConfig() map[string]any {
-    return map[string]any{
-        "sprint_length_days": 14,
-    }
-}
-
-func (scrumStrategy) ValidateConfig(c map[string]any) error {
-    if v, ok := c["sprint_length_days"]; ok {
-        if n, ok := v.(float64); !ok || n < 1 || n > 90 {
-            return ErrValidation
-        }
-    }
-    return nil
-}
-
-type calendarStrategy struct{}
-
-func (calendarStrategy) DefaultColumns() []BoardColumnInput {
-    return nil // Calendar nutzt keine Spalten
-}
-
-func (calendarStrategy) DefaultConfig() map[string]any {
-    return map[string]any{
-        "week_start": "monday",
-    }
-}
-
-func (calendarStrategy) ValidateConfig(c map[string]any) error {
-    if v, ok := c["week_start"]; ok {
-        if s, ok := v.(string); !ok || (s != "monday" && s != "sunday") {
-            return ErrValidation
-        }
-    }
-    return nil
-}
-
-var boardStrategies = map[BoardType]BoardTypeStrategy{
-    BoardTypeKanban:   kanbanStrategy{},
-    BoardTypeScrum:    scrumStrategy{},
-    BoardTypeCalendar: calendarStrategy{},
-}
-```
+**Cache-Invalidierung:** Der Project-Event-Consumer bindet `boardtype.registered/updated/deleted`
+und invalidiert den `boardtypeclient`-Cache für den betroffenen Typ (gleiches Muster wie die
+Permission-Cache-Invalidierung auf `project.member.*`).
 
 ### 9.2 Erweiterungspunkt
 
-Neuer Board-Typ "gantt" einzubauen bedeutet:
+Einen neuen Board-Typ "gantt" einzuführen bedeutet **keinen Redeploy** des Project-Service mehr:
 
-1. `boards.type CHECK`-Constraint erweitern (Migration)
-2. Neue Strategy-Implementation `ganttStrategy`
-3. Eintrag in `boardStrategies`-Map
-4. Frontend: passende View-Komponente
-5. Optional: eigener Reader im Notification-Service, falls Gantt-spezifische Events relevant
+1. `POST /api/v1/board-types` an die Board-Registry (Typ-Slug, Display-Name, Icon,
+   Default-Columns inkl. `status`, Default-Config, `config_schema`).
+2. Frontend: passende View-Komponente.
 
-**Kein Code-Change** in Task Service, Document Service oder anderen Services. Genau das Plugin-Pattern aus der Aufgabenstellung.
+Der DB-`CHECK`-Constraint auf `boards.type` wurde in Migration `0002_drop_board_type_check`
+entfernt; `boards.type` ist ein freier Slug, dessen Gültigkeit über die Registry bestimmt wird.
+**Kein Code-Change** im Project-, Task- oder Document-Service. Genau das Plugin-Pattern aus der
+Aufgabenstellung — jetzt mit echter Laufzeit-Erweiterbarkeit durch Dritte.
 
 ---
 

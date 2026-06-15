@@ -60,7 +60,7 @@ make lint-fix        # with --fix
 
 ### High-Level Structure
 
-Seven domain services behind a Traefik gateway, communicating asynchronously via RabbitMQ (`teamboard.events` topic exchange). Synchronous calls only when the user needs an immediate response.
+Domain services behind a Traefik gateway, communicating asynchronously via RabbitMQ (`teamboard.events` topic exchange). Synchronous calls only when the user needs an immediate response.
 
 | Service | Port | Responsibility |
 |---------|------|----------------|
@@ -70,13 +70,16 @@ Seven domain services behind a Traefik gateway, communicating asynchronously via
 | Document | 8004 | Metadata + S3/MinIO storage, pre-signed URLs, versioning |
 | Notification | 8005 | WebSocket push + persistent notifications; stateful (Redis backplane) |
 | Plugin/Webhook | 8006 | Webhook registration, delivery with retry + HMAC signing |
+| Board Registry | 8007 | **Authoritative source for board-type definitions**; runtime registration of new board types |
 | Gateway | 80 | Traefik routing, rate limiting, CORS, trace-ID injection |
+
+**Board-type extensibility:** Board *types* (kanban/scrum/calendar + custom) are runtime data owned by the Board Registry service, not compile-time code. The Project Service resolves a type's default columns, default config, and JSON-schema validation from the registry's internal API (`GET /api/v1/internal/board-types/{type}`, cached, service-token auth) when creating a board, and invalidates that cache on `boardtype.*` events. Each default column carries an explicit semantic `status` (open/in_progress/blocked/done/archived) that flows via `board.created`/`column.*` events into the Task Service, which uses it directly instead of guessing from the column name (`DeriveStatus` remains a fallback).
 
 **Authorization flow:** Task, Document, Notification, and Plugin services each call `GET /api/v1/internal/projects/{id}/permissions/{userId}` on the Project Service before every write operation. Responses are cached in Redis (TTL 30s) and invalidated on `project.member.*` events.
 
 **Outbox Pattern (mandatory):** Every service that publishes events writes to an `outbox` table in the same DB transaction as the domain mutation. The `shared/go/outbox` Worker polls and publishes to RabbitMQ. Consumers track processed `event_id`s in a `processed_events` table for idempotency.
 
-**Database topology (local dev):** One Postgres instance with six logical databases (`auth_db`, `project_db`, `task_db`, `document_db`, `notification_db`, `plugin_db`). In AWS these become separate RDS instances.
+**Database topology (local dev):** One Postgres instance with seven logical databases (`auth_db`, `project_db`, `task_db`, `document_db`, `notification_db`, `plugin_db`, `boardregistry_db`). In AWS these become separate RDS instances.
 
 ### Monorepo Layout
 

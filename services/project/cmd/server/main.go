@@ -15,12 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/teamboard/services/project/internal/api"
-	// Board type plugins — each self-registers via init().
-	// To add a new board type: create a package under internal/boardplugins/<name>/
-	// implementing boardplugins.Plugin, then add a blank import here.
-	_ "github.com/teamboard/services/project/internal/boardplugins/calendar"
-	_ "github.com/teamboard/services/project/internal/boardplugins/kanban"
-	_ "github.com/teamboard/services/project/internal/boardplugins/scrum"
+	"github.com/teamboard/services/project/internal/boardtypeclient"
 	"github.com/teamboard/services/project/internal/cache"
 	"github.com/teamboard/services/project/internal/config"
 	"github.com/teamboard/services/project/internal/domain"
@@ -78,14 +73,15 @@ func main() {
 	// Domain wiring
 	repo := repository.New(pool)
 	permCache := cache.NewRedis(redisClient)
-	svc := domain.NewProjectService(repo, permCache)
+	boardTypes := boardtypeclient.New(cfg.BoardRegistryURL, cfg.ServiceTokenSecret, cfg.BoardRegistryTimeout, cfg.BoardTypeCacheTTL)
+	svc := domain.NewProjectService(repo, permCache, boardTypes)
 
 	// Outbox publisher
 	publisher := events.NewPublisher(repo, rabbitConn, cfg.RabbitExchange)
 	go publisher.Run(ctx)
 
-	// Event consumer
-	consumer := events.NewConsumer(repo, rabbitConn, cfg.RabbitExchange, cfg.RabbitQueue)
+	// Event consumer (also invalidates the board-type cache on boardtype.* events)
+	consumer := events.NewConsumer(repo, rabbitConn, cfg.RabbitExchange, cfg.RabbitQueue, boardTypes)
 	go consumer.Run(ctx)
 
 	// HTTP server

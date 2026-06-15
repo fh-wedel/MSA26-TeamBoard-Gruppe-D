@@ -80,6 +80,7 @@ Entscheidung: Traefik lokal (Service-Discovery via Labels passt perfekt zu Docke
 | `/api/v1/comments/*` | task | `/comments/{id}` |
 | `/api/v1/documents/*` | document | `/documents/{id}`, `/documents/{id}/download` |
 | `/api/v1/webhooks/*` | plugin | `/webhooks/{id}`, `/webhooks/{id}/deliveries` |
+| `/api/v1/board-types/*` | boardregistry | `/board-types`, `/board-types/{type}` (Katalog + Registrierung) |
 | `/api/v1/notifications/*` | notification | `/notifications`, `/notifications/{id}/read` |
 | `/ws` | notification | WebSocket-Upgrade |
 
@@ -216,6 +217,12 @@ services:
       - traefik.http.routers.plugin.rule=PathPrefix(`/api/v1/webhooks`) || PathRegexp(`^/api/v1/projects/[^/]+/webhooks`)
       - traefik.http.routers.plugin.priority=20
       - traefik.http.services.plugin.loadbalancer.server.port=8006
+
+  boardregistry:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.boardregistry.rule=PathPrefix(`/api/v1/board-types`)
+      - traefik.http.services.boardregistry.loadbalancer.server.port=8007
 ```
 
 **Priority-Logik:** Höhere Priority gewinnt. `task` (20) > `project` (10) für `/boards/{id}/tasks`. `document` und `plugin` (jeweils 20) > `project` (10) für ihre Project-Subpfade.

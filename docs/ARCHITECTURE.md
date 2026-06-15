@@ -309,6 +309,12 @@ Sieben Services bilden das System. Jeder Service hat einen klar abgegrenzten Ver
 | Document | 8004 | Postgres `document_db` + S3 | nein | horizontal |
 | Notification | 8005 | Postgres `notification_db` + Redis | **ja (WS)** | horizontal mit Backplane |
 | Plugin/Webhook | 8006 | Postgres `plugin_db` | nein | horizontal |
+| Board Registry | 8007 | Postgres `boardregistry_db` | nein | horizontal |
+
+**Board Registry (8007):** Autoritative Quelle für Board-Typ-Definitionen (Default-Columns inkl.
+Status, Default-Config, JSON-Schema). Der Project-Service löst Typen zur Laufzeit über die
+internal-API auf (Service-Token, Cache) und invalidiert den Cache auf `boardtype.*`-Events. Details:
+`docs/services/boardregistry.md`.
 
 ---
 
@@ -660,7 +666,9 @@ Die Spec ist Source of Truth — handgeschriebener Code implementiert die generi
 | `project.deleted` | project | `project_id` |
 | `project.member.added` | project | `project_id`, `user_id`, `role` |
 | `project.member.removed` | project | `project_id`, `user_id` |
-| `board.created` | project | `board_id`, `project_id`, `name`, `type` |
+| `board.created` | project | `board_id`, `project_id`, `name`, `type`, `columns[]` (inkl. `status`) |
+| `column.created` / `column.updated` | project | `column_id`, `board_id`, `name`, `position`, `status` |
+| `boardtype.registered` / `boardtype.updated` / `boardtype.deleted` | boardregistry | `type`, `display_name` |
 | `task.created` | task | `task_id`, `board_id`, `title`, `created_by` |
 | `task.updated` | task | `task_id`, `changes` (Diff) |
 | `task.assigned` | task | `task_id`, `assignee_id`, `assigned_by` |

@@ -390,18 +390,21 @@ func (q *queries) MarkBoardDeleted(ctx context.Context, id uuid.UUID) error {
 
 // ── Known columns ─────────────────────────────────────────────────────────────
 
-const upsertKnownColumn = `INSERT INTO known_columns (id,board_id,name,position) VALUES($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,position=EXCLUDED.position`
+const upsertKnownColumn = `INSERT INTO known_columns (id,board_id,name,position,status) VALUES($1,$2,$3,$4,$5) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,position=EXCLUDED.position,status=EXCLUDED.status`
 
-func (q *queries) UpsertKnownColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int) error {
-	_, err := q.db.Exec(ctx, upsertKnownColumn, id, boardID, name, position)
+func (q *queries) UpsertKnownColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, status string) error {
+	if status == "" {
+		status = "open"
+	}
+	_, err := q.db.Exec(ctx, upsertKnownColumn, id, boardID, name, position, status)
 	return err
 }
 
-const getKnownColumn = `SELECT id,board_id,name,position FROM known_columns WHERE id=$1`
+const getKnownColumn = `SELECT id,board_id,name,position,status FROM known_columns WHERE id=$1`
 
 func (q *queries) GetKnownColumn(ctx context.Context, id uuid.UUID) (*KnownColumn, error) {
 	c := &KnownColumn{}
-	err := q.db.QueryRow(ctx, getKnownColumn, id).Scan(&c.ID, &c.BoardID, &c.Name, &c.Position)
+	err := q.db.QueryRow(ctx, getKnownColumn, id).Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.Status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pgx.ErrNoRows
 	}

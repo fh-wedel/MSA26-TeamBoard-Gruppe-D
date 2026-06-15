@@ -431,10 +431,10 @@ func (r *fakeRepo) MarkBoardDeleted(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *fakeRepo) UpsertKnownColumn(_ context.Context, id, boardID uuid.UUID, name string, position int) error {
+func (r *fakeRepo) UpsertKnownColumn(_ context.Context, id, boardID uuid.UUID, name string, position int, status string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.knownColumns[id] = &domain.KnownColumn{ID: id, BoardID: boardID, Name: name, Position: position}
+	r.knownColumns[id] = &domain.KnownColumn{ID: id, BoardID: boardID, Name: name, Position: position, Status: status}
 	return nil
 }
 
@@ -580,7 +580,34 @@ func seedColumn(repo *fakeRepo, colID, boardID uuid.UUID, name string) {
 	repo.knownColumns[colID] = &domain.KnownColumn{ID: colID, BoardID: boardID, Name: name, Position: 1}
 }
 
+func seedColumnWithStatus(repo *fakeRepo, colID, boardID uuid.UUID, name, status string) {
+	repo.knownColumns[colID] = &domain.KnownColumn{ID: colID, BoardID: boardID, Name: name, Position: 1, Status: status}
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+func TestTaskService_CreateTask_ExplicitColumnStatusWins(t *testing.T) {
+	svc, repo, proj, _ := makeService(t)
+
+	boardID := uuid.New()
+	projectID := uuid.New()
+	userID := uuid.New()
+	colID := uuid.New()
+
+	seedBoard(repo, boardID, projectID)
+	// Column name "Shipped" would derive to open, but the explicit status is done.
+	seedColumnWithStatus(repo, colID, boardID, "Shipped", "done")
+	proj.allow(projectID, userID, "task:create", "task:read")
+
+	task, err := (*svc).CreateTask(context.Background(), userID, domain.CreateTaskInput{
+		BoardID:  boardID,
+		ColumnID: &colID,
+		Title:    "Done task",
+		Priority: domain.PriorityMedium,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusDone, task.Status)
+}
 
 func TestTaskService_CreateTask_HappyPath(t *testing.T) {
 	svc, repo, proj, _ := makeService(t)

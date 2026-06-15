@@ -216,8 +216,8 @@ func (r *postgresRepo) GetMaxBoardPosition(ctx context.Context, projectID uuid.U
 
 // ── Columns ───────────────────────────────────────────────────────────────────
 
-func (r *postgresRepo) CreateColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int) (*domain.BoardColumn, error) {
-	c, err := r.q.CreateColumn(ctx, id, boardID, name, position, wipLimit)
+func (r *postgresRepo) CreateColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int, status string) (*domain.BoardColumn, error) {
+	c, err := r.q.CreateColumn(ctx, id, boardID, name, position, wipLimit, status)
 	if err != nil {
 		return nil, err
 	}
@@ -377,6 +377,7 @@ func mapColumn(c *db.BoardColumn) *domain.BoardColumn {
 		Name:     c.Name,
 		Position: c.Position,
 		WIPLimit: c.WIPLimit,
+		Status:   c.Status,
 	}
 }
 

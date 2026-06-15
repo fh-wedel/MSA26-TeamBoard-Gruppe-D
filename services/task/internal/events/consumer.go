@@ -176,6 +176,7 @@ func (c *Consumer) handleBoardCreated(ctx context.Context, body []byte) error {
 			ID       string `json:"id"`
 			Name     string `json:"name"`
 			Position int    `json:"position"`
+			Status   string `json:"status"`
 		} `json:"columns"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -197,7 +198,7 @@ func (c *Consumer) handleBoardCreated(ctx context.Context, body []byte) error {
 		if err != nil {
 			return err
 		}
-		if err := c.repo.UpsertKnownColumn(ctx, columnID, boardID, col.Name, col.Position); err != nil {
+		if err := c.repo.UpsertKnownColumn(ctx, columnID, boardID, col.Name, col.Position, col.Status); err != nil {
 			return err
 		}
 	}
@@ -230,6 +231,7 @@ func (c *Consumer) handleColumnUpserted(ctx context.Context, body []byte) error 
 		BoardID  string `json:"board_id"`
 		Name     string `json:"name"`
 		Position int    `json:"position"`
+		Status   string `json:"status"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return err
@@ -242,7 +244,7 @@ func (c *Consumer) handleColumnUpserted(ctx context.Context, body []byte) error 
 	if err != nil {
 		return err
 	}
-	return c.repo.UpsertKnownColumn(ctx, columnID, boardID, payload.Name, payload.Position)
+	return c.repo.UpsertKnownColumn(ctx, columnID, boardID, payload.Name, payload.Position, payload.Status)
 }
 
 func (c *Consumer) handleColumnDeleted(ctx context.Context, body []byte) error {

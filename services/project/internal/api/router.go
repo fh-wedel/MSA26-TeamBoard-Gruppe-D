@@ -58,7 +58,8 @@ func NewRouter(svc domain.ProjectService, serviceTokenSecret string) http.Handle
 			})
 		})
 
-		r.Get("/api/v1/board-types", h.ListBoardTypes)
+		// Board-type catalog is served by the board registry service (routed at the
+		// gateway). The project service consumes its internal API via boardtypeclient.
 
 		// Invitation accept/decline (token-based, invitee must be logged in)
 		r.Route("/api/v1/invitations/{token}", func(r chi.Router) {
@@ -134,6 +135,7 @@ var domainStatusMap = map[string]int{
 	"already_member":      http.StatusConflict,
 	"invalid_role":        http.StatusBadRequest,
 	"invalid_board_type":  http.StatusBadRequest,
+	"board_type_registry_unavailable": http.StatusServiceUnavailable,
 	"last_owner":          http.StatusConflict,
 	"permission_denied":   http.StatusForbidden,
 }

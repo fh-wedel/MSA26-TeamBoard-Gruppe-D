@@ -79,12 +79,12 @@ func (s *service) CreateTask(ctx context.Context, requester uuid.UUID, input Cre
 		return nil, ErrInvalidPosition
 	}
 
-	// Derive status from column name.
+	// Use the column's explicit status (falling back to name derivation).
 	status := StatusOpen
 	if input.ColumnID != nil {
 		col, err := s.repo.GetKnownColumn(ctx, *input.ColumnID)
 		if err == nil {
-			status = DeriveStatus(col.Name)
+			status = statusForColumn(col)
 		}
 	}
 
@@ -218,11 +218,11 @@ func (s *service) MoveTask(ctx context.Context, taskID, requester uuid.UUID, col
 		return nil, ErrInvalidPosition
 	}
 
-	// Derive new status from column name.
+	// Use the destination column's explicit status (falling back to name derivation).
 	newStatus := task.Status
 	col, err := s.repo.GetKnownColumn(ctx, columnID)
 	if err == nil {
-		newStatus = DeriveStatus(col.Name)
+		newStatus = statusForColumn(col)
 	}
 
 	oldColumnID := task.ColumnID

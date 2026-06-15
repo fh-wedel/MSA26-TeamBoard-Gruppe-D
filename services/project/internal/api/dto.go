@@ -45,12 +45,14 @@ type columnInput struct {
 	Name     string `json:"name"`
 	Position int    `json:"position"`
 	WIPLimit *int   `json:"wip_limit"`
+	Status   string `json:"status"`
 }
 
 type createColumnRequest struct {
 	Name     string `json:"name"`
 	Position int    `json:"position"`
 	WIPLimit *int   `json:"wip_limit"`
+	Status   string `json:"status"`
 }
 
 // ── Responses ─────────────────────────────────────────────────────────────────
@@ -92,6 +94,7 @@ type columnResponse struct {
 	Name     string    `json:"name"`
 	Position int       `json:"position"`
 	WIPLimit *int      `json:"wip_limit,omitempty"`
+	Status   string    `json:"status"`
 }
 
 type permissionResponse struct {
@@ -151,6 +154,7 @@ func mapColumnResponse(c domain.BoardColumn) columnResponse {
 		Name:     c.Name,
 		Position: c.Position,
 		WIPLimit: c.WIPLimit,
+		Status:   c.Status,
 	}
 }
 

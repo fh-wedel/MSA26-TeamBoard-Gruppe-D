@@ -59,7 +59,7 @@ type Querier interface {
 	UpsertKnownBoard(ctx context.Context, id, projectID uuid.UUID, name, bType string) error
 	GetKnownBoard(ctx context.Context, id uuid.UUID) (*KnownBoard, error)
 	MarkBoardDeleted(ctx context.Context, id uuid.UUID) error
-	UpsertKnownColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int) error
+	UpsertKnownColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, status string) error
 	GetKnownColumn(ctx context.Context, id uuid.UUID) (*KnownColumn, error)
 	ColumnBelongsToBoard(ctx context.Context, columnID, boardID uuid.UUID) (bool, error)
 	DeleteKnownColumn(ctx context.Context, id uuid.UUID) error

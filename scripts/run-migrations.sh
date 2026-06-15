@@ -43,4 +43,5 @@ run_for_db task_db         /migrations/task
 run_for_db document_db     /migrations/document
 run_for_db notification_db /migrations/notification
 run_for_db plugin_db       /migrations/plugin
+run_for_db boardregistry_db /migrations/boardregistry
 echo "Migrations complete."

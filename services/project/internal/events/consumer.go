@@ -11,16 +11,23 @@ import (
 	"github.com/teamboard/services/project/internal/domain"
 )
 
-// Consumer handles inbound RabbitMQ events.
-type Consumer struct {
-	repo     domain.Repository
-	conn     *amqp.Connection
-	queue    string
-	exchange string
+// BoardTypeInvalidator drops cached board-type definitions when the registry
+// announces a change (implemented by boardtypeclient).
+type BoardTypeInvalidator interface {
+	Invalidate(typeID string)
 }
 
-func NewConsumer(repo domain.Repository, conn *amqp.Connection, exchange, queue string) *Consumer {
-	return &Consumer{repo: repo, conn: conn, exchange: exchange, queue: queue}
+// Consumer handles inbound RabbitMQ events.
+type Consumer struct {
+	repo        domain.Repository
+	conn        *amqp.Connection
+	queue       string
+	exchange    string
+	invalidator BoardTypeInvalidator
+}
+
+func NewConsumer(repo domain.Repository, conn *amqp.Connection, exchange, queue string, invalidator BoardTypeInvalidator) *Consumer {
+	return &Consumer{repo: repo, conn: conn, exchange: exchange, queue: queue, invalidator: invalidator}
 }
 
 func (c *Consumer) Run(ctx context.Context) {
@@ -53,7 +60,10 @@ func (c *Consumer) consume(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, key := range []string{"user.registered", "user.deleted"} {
+	for _, key := range []string{
+		"user.registered", "user.deleted",
+		"boardtype.registered", "boardtype.updated", "boardtype.deleted",
+	} {
 		if err := ch.QueueBind(q.Name, key, c.exchange, false, nil); err != nil {
 			return err
 		}
@@ -96,6 +106,8 @@ func (c *Consumer) handleMessage(ctx context.Context, msg amqp.Delivery) {
 		handleErr = c.handleUserRegistered(ctx, msg.Body)
 	case "user.deleted":
 		handleErr = c.handleUserDeleted(ctx, msg.Body)
+	case "boardtype.registered", "boardtype.updated", "boardtype.deleted":
+		handleErr = c.handleBoardTypeChanged(ctx, msg.Body)
 	}
 
 	if handleErr != nil {
@@ -147,6 +159,22 @@ func (c *Consumer) handleUserDeleted(ctx context.Context, body []byte) error {
 	_ = projectIDs
 
 	return c.repo.MarkKnownUserDeleted(ctx, userID)
+}
+
+func (c *Consumer) handleBoardTypeChanged(_ context.Context, body []byte) error {
+	if c.invalidator == nil {
+		return nil
+	}
+	var payload struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return err
+	}
+	if payload.Type != "" {
+		c.invalidator.Invalidate(payload.Type)
+	}
+	return nil
 }
 
 // ensure domain.Repository satisfies the outbox methods we need

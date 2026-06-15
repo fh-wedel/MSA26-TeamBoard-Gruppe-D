@@ -345,8 +345,8 @@ func (r *postgresRepo) MarkBoardDeleted(ctx context.Context, id uuid.UUID) error
 	return r.q.MarkBoardDeleted(ctx, id)
 }
 
-func (r *postgresRepo) UpsertKnownColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int) error {
-	return r.q.UpsertKnownColumn(ctx, id, boardID, name, position)
+func (r *postgresRepo) UpsertKnownColumn(ctx context.Context, id, boardID uuid.UUID, name string, position int, status string) error {
+	return r.q.UpsertKnownColumn(ctx, id, boardID, name, position, status)
 }
 
 func (r *postgresRepo) GetKnownColumn(ctx context.Context, id uuid.UUID) (*domain.KnownColumn, error) {
@@ -354,7 +354,7 @@ func (r *postgresRepo) GetKnownColumn(ctx context.Context, id uuid.UUID) (*domai
 	if err != nil {
 		return nil, err
 	}
-	return &domain.KnownColumn{ID: c.ID, BoardID: c.BoardID, Name: c.Name, Position: c.Position}, nil
+	return &domain.KnownColumn{ID: c.ID, BoardID: c.BoardID, Name: c.Name, Position: c.Position, Status: c.Status}, nil
 }
 
 func (r *postgresRepo) ColumnBelongsToBoard(ctx context.Context, columnID, boardID uuid.UUID) (bool, error) {

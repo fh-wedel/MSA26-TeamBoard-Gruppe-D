@@ -8,6 +8,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE DATABASE document_db;
     CREATE DATABASE notification_db;
     CREATE DATABASE plugin_db;
+    CREATE DATABASE boardregistry_db;
 EOSQL
 
 echo "All service databases created."

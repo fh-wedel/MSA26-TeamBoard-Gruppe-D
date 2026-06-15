@@ -71,6 +71,7 @@ type KnownColumn struct {
 	BoardID  uuid.UUID
 	Name     string
 	Position int
+	Status   string
 }
 
 type OutboxEvent struct {

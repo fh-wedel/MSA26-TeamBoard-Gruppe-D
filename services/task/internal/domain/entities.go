@@ -70,6 +70,9 @@ type KnownColumn struct {
 	BoardID  uuid.UUID
 	Name     string
 	Position int
+	// Status is the explicit semantic status set on the source board column. When
+	// empty (legacy data), the status is derived from Name via DeriveStatus.
+	Status string
 }
 
 type OutboxEvent struct {

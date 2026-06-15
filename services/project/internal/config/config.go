@@ -1,6 +1,10 @@
 package config
 
-import "github.com/caarlos0/env/v10"
+import (
+	"time"
+
+	"github.com/caarlos0/env/v10"
+)
 
 type Config struct {
 	HTTPPort    int    `env:"HTTP_PORT"    envDefault:"8002"`
@@ -14,6 +18,11 @@ type Config struct {
 	OutboxBatchSize  int    `env:"OUTBOX_BATCH_SIZE"  envDefault:"50"`
 
 	ServiceTokenSecret string `env:"SERVICE_TOKEN_SECRET" envRequired:"true"`
+
+	// Board registry service (source of board-type definitions).
+	BoardRegistryURL     string        `env:"BOARDREGISTRY_SERVICE_URL" envDefault:"http://boardregistry:8007"`
+	BoardRegistryTimeout time.Duration `env:"BOARDREGISTRY_TIMEOUT"     envDefault:"500ms"`
+	BoardTypeCacheTTL    time.Duration `env:"BOARDTYPE_CACHE_TTL"       envDefault:"60s"`
 
 	LogLevel  string `env:"LOG_LEVEL"  envDefault:"info"`
 	OTELEndpoint string `env:"OTEL_ENDPOINT" envDefault:""`

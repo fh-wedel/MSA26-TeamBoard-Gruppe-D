@@ -34,7 +34,7 @@
 
 **Volumes mit Sinn.** Persistente Daten (Postgres, MinIO) in benannten Volumes. Source-Code via Bind-Mount (Override-File). Keine Volumes für Code in Production-Compose.
 
-**Eine Postgres, mehrere Datenbanken.** Im MVP: eine Postgres-Instanz mit Schema-pro-Service (`auth_db`, `project_db`, `task_db`, `document_db`, `notification_db`, `plugin_db`). Database-per-Service-Prinzip auf logischer Ebene erfüllt, ohne sechs Container für sechs DBs zu starten. In AWS-Deployment werden's separate RDS-Instanzen.
+**Eine Postgres, mehrere Datenbanken.** Im MVP: eine Postgres-Instanz mit Schema-pro-Service (`auth_db`, `project_db`, `task_db`, `document_db`, `notification_db`, `plugin_db`, `boardregistry_db`). Database-per-Service-Prinzip auf logischer Ebene erfüllt, ohne sieben Container für sieben DBs zu starten. In AWS-Deployment werden's separate RDS-Instanzen.
 
 **Kein `latest`-Tag.** Alle Image-Versionen pinnen. Reproduzierbarkeit > minimaler Versionsaufwand.
 
@@ -773,6 +773,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE DATABASE document_db;
     CREATE DATABASE notification_db;
     CREATE DATABASE plugin_db;
+    CREATE DATABASE boardregistry_db;
 EOSQL
 
 echo "All service databases created."
@@ -912,7 +913,7 @@ urls:
 # DEVELOPMENT
 # ============================================================
 
-SERVICES := auth project task document notification plugin
+SERVICES := auth project task document notification plugin boardregistry
 
 migrate:
 	@for svc in $(SERVICES); do \

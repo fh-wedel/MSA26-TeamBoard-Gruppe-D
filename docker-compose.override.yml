@@ -65,5 +65,16 @@ services:
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
+  boardregistry:
+    build:
+      context: .
+      dockerfile: services/boardregistry/Dockerfile
+      target: dev
+    volumes:
+      - ./services/boardregistry:/workspace/services/boardregistry
+      - ./shared/go:/workspace/shared/go
+      - go-mod-cache:/go/pkg/mod
+    command: air -c .air.toml
+
 volumes:
   go-mod-cache:

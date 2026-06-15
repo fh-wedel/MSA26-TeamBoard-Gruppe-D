@@ -47,6 +47,10 @@ type BoardColumn struct {
 	Name     string
 	Position int
 	WIPLimit *int
+	// Status is the semantic task status for tasks in this column. It originates
+	// from the board-type definition and is propagated to the task service via
+	// board.created / column.* events so the task service no longer guesses it.
+	Status string
 }
 
 type KnownUser struct {
@@ -70,6 +74,9 @@ func ValidRole(r Role) bool {
 	return r == RoleViewer || r == RoleEditor || r == RoleOwner
 }
 
+// BoardType is the slug identifying a board type. Valid values are no longer a
+// fixed enum — they are resolved at runtime against the board registry service.
+// The constants below name the built-in seed types for convenience only.
 type BoardType string
 
 const (
@@ -96,6 +103,7 @@ type BoardColumnInput struct {
 	Name     string
 	Position int
 	WIPLimit *int
+	Status   string
 }
 
 type BoardPatch struct {

@@ -1,7 +1,7 @@
 -- name: UpsertKnownColumn :exec
-INSERT INTO known_columns (id, board_id, name, position)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, position = EXCLUDED.position;
+INSERT INTO known_columns (id, board_id, name, position, status)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, position = EXCLUDED.position, status = EXCLUDED.status;
 
 -- name: GetKnownColumn :one
 SELECT * FROM known_columns WHERE id = $1;

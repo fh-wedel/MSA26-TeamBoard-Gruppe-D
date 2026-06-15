@@ -21,9 +21,10 @@ type fakeRepo struct {
 	members    map[string]*domain.ProjectMember // key: "projectID:userID"
 	boards     map[uuid.UUID]*domain.Board
 	columns    map[uuid.UUID]*domain.BoardColumn
-	knownUsers map[uuid.UUID]*domain.KnownUser
-	emailIndex map[string]*domain.KnownUser
-	processed  map[string]bool
+	knownUsers  map[uuid.UUID]*domain.KnownUser
+	emailIndex  map[string]*domain.KnownUser
+	processed   map[string]bool
+	invitations map[string]*domain.Invitation // key: token
 }
 
 func newFakeRepo() *fakeRepo {
@@ -32,10 +33,68 @@ func newFakeRepo() *fakeRepo {
 		members:    make(map[string]*domain.ProjectMember),
 		boards:     make(map[uuid.UUID]*domain.Board),
 		columns:    make(map[uuid.UUID]*domain.BoardColumn),
-		knownUsers: make(map[uuid.UUID]*domain.KnownUser),
-		emailIndex: make(map[string]*domain.KnownUser),
-		processed:  make(map[string]bool),
+		knownUsers:  make(map[uuid.UUID]*domain.KnownUser),
+		emailIndex:  make(map[string]*domain.KnownUser),
+		processed:   make(map[string]bool),
+		invitations: make(map[string]*domain.Invitation),
 	}
+}
+
+func (r *fakeRepo) CreateInvitation(_ context.Context, id, projectID uuid.UUID, email, role, token string, invitedBy uuid.UUID) (*domain.Invitation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	inv := &domain.Invitation{
+		ID: id, ProjectID: projectID, InviteeEmail: email, Role: domain.Role(role),
+		Token: token, InvitedBy: invitedBy, Status: domain.InvitationStatusPending,
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(72 * time.Hour),
+	}
+	r.invitations[token] = inv
+	return inv, nil
+}
+
+func (r *fakeRepo) GetInvitationByToken(_ context.Context, token string) (*domain.Invitation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	inv, ok := r.invitations[token]
+	if !ok {
+		return nil, domain.ErrInvitationNotFound
+	}
+	return inv, nil
+}
+
+func (r *fakeRepo) GetPendingInvitationByEmailAndProject(_ context.Context, email string, projectID uuid.UUID) (*domain.Invitation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, inv := range r.invitations {
+		if inv.InviteeEmail == email && inv.ProjectID == projectID && inv.Status == domain.InvitationStatusPending {
+			return inv, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *fakeRepo) GetInvitationsByProject(_ context.Context, projectID uuid.UUID) ([]*domain.Invitation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []*domain.Invitation
+	for _, inv := range r.invitations {
+		if inv.ProjectID == projectID {
+			out = append(out, inv)
+		}
+	}
+	return out, nil
+}
+
+func (r *fakeRepo) UpdateInvitationStatus(_ context.Context, id uuid.UUID, status domain.InvitationStatus) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, inv := range r.invitations {
+		if inv.ID == id {
+			inv.Status = status
+			return nil
+		}
+	}
+	return domain.ErrInvitationNotFound
 }
 
 func memberKey(projectID, userID uuid.UUID) string {
@@ -256,10 +315,10 @@ func (r *fakeRepo) GetMaxBoardPosition(_ context.Context, projectID uuid.UUID) (
 	return max, nil
 }
 
-func (r *fakeRepo) CreateColumn(_ context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int) (*domain.BoardColumn, error) {
+func (r *fakeRepo) CreateColumn(_ context.Context, id, boardID uuid.UUID, name string, position int, wipLimit *int, status string) (*domain.BoardColumn, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	c := &domain.BoardColumn{ID: id, BoardID: boardID, Name: name, Position: position, WIPLimit: wipLimit}
+	c := &domain.BoardColumn{ID: id, BoardID: boardID, Name: name, Position: position, WIPLimit: wipLimit, Status: status}
 	r.columns[id] = c
 	return c, nil
 }
@@ -376,11 +435,61 @@ func seedKnownUser(t *testing.T, repo *fakeRepo, userID uuid.UUID, email string)
 	require.NoError(t, repo.UpsertKnownUser(context.Background(), userID, email, time.Now()))
 }
 
+// fakeBoardTypeRegistry serves the built-in board-type definitions for tests.
+type fakeBoardTypeRegistry struct{}
+
+func intPtr(i int) *int { return &i }
+
+func (fakeBoardTypeRegistry) GetType(_ context.Context, typeID string) (*domain.BoardTypeDef, error) {
+	switch typeID {
+	case "kanban":
+		return &domain.BoardTypeDef{
+			Type: "kanban", DisplayName: "Kanban Board", Icon: "📋",
+			DefaultColumns: []domain.BoardTypeColumn{
+				{Name: "To Do", Position: 0, Status: "open"},
+				{Name: "In Progress", Position: 1, WIPLimit: intPtr(3), Status: "in_progress"},
+				{Name: "Done", Position: 2, Status: "done"},
+			},
+			DefaultConfig: map[string]any{}, ConfigSchema: map[string]any{},
+		}, nil
+	case "scrum":
+		return &domain.BoardTypeDef{
+			Type: "scrum", DisplayName: "Scrum Board", Icon: "🏃",
+			DefaultColumns: []domain.BoardTypeColumn{
+				{Name: "Backlog", Position: 0, Status: "open"},
+				{Name: "Sprint", Position: 1, Status: "open"},
+				{Name: "In Progress", Position: 2, Status: "in_progress"},
+				{Name: "Review", Position: 3, Status: "in_progress"},
+				{Name: "Done", Position: 4, Status: "done"},
+			},
+			DefaultConfig: map[string]any{"sprint_length_days": float64(14)},
+			ConfigSchema: map[string]any{
+				"type":                 "object",
+				"properties":           map[string]any{"sprint_length_days": map[string]any{"type": "integer", "minimum": float64(1), "maximum": float64(90)}},
+				"additionalProperties": false,
+			},
+		}, nil
+	case "calendar":
+		return &domain.BoardTypeDef{
+			Type: "calendar", DisplayName: "Calendar", Icon: "📅",
+			DefaultColumns: nil,
+			DefaultConfig:  map[string]any{"week_start": "monday"},
+			ConfigSchema: map[string]any{
+				"type":                 "object",
+				"properties":           map[string]any{"week_start": map[string]any{"type": "string", "enum": []any{"monday", "sunday"}}},
+				"additionalProperties": false,
+			},
+		}, nil
+	default:
+		return nil, domain.ErrInvalidBoardType
+	}
+}
+
 func newSvc(t *testing.T) (domain.ProjectService, *fakeRepo, *fakeCache) {
 	t.Helper()
 	repo := newFakeRepo()
 	cache := newFakeCache()
-	svc := domain.NewProjectService(repo, cache)
+	svc := domain.NewProjectService(repo, cache, fakeBoardTypeRegistry{})
 	return svc, repo, cache
 }
 
@@ -658,6 +767,29 @@ func TestCreateBoard_ScrumDefaultColumns(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Len(t, board.Columns, 5)
+}
+
+type unavailableRegistry struct{}
+
+func (unavailableRegistry) GetType(context.Context, string) (*domain.BoardTypeDef, error) {
+	return nil, domain.ErrBoardTypeRegistryUnavailable
+}
+
+func TestCreateBoard_RegistryUnavailable(t *testing.T) {
+	repo := newFakeRepo()
+	cache := newFakeCache()
+	svc := domain.NewProjectService(repo, cache, unavailableRegistry{})
+	ownerID := uuid.New()
+	seedKnownUser(t, repo, ownerID, "o@x.com")
+
+	proj, err := svc.CreateProject(context.Background(), ownerID, "P", "")
+	require.NoError(t, err)
+
+	_, err = svc.CreateBoard(context.Background(), proj.ID, ownerID, domain.BoardInput{Name: "B", Type: "kanban"})
+	require.Error(t, err)
+	var de *domain.Error
+	require.True(t, errors.As(err, &de))
+	assert.Equal(t, "board_type_registry_unavailable", de.Code)
 }
 
 func TestDeleteBoard_HappyPath(t *testing.T) {

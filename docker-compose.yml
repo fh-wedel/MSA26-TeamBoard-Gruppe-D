@@ -123,6 +123,7 @@ services:
       - ./services/document/migrations:/migrations/document:ro
       - ./services/notification/migrations:/migrations/notification:ro
       - ./services/plugin/migrations:/migrations/plugin:ro
+      - ./services/boardregistry/migrations:/migrations/boardregistry:ro
     entrypoint: /bin/sh
     command: /run-migrations.sh
     networks:
@@ -229,11 +230,14 @@ services:
       RABBIT_QUEUE: project-service
       REDIS_URL: redis://redis:6379/1
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
+      BOARDREGISTRY_SERVICE_URL: http://boardregistry:8007
       OTEL_ENDPOINT: http://jaeger:4317
     depends_on:
       migrate:
         condition: service_completed_successfully
       auth:
+        condition: service_healthy
+      boardregistry:
         condition: service_healthy
       postgres:
         condition: service_healthy
@@ -414,6 +418,39 @@ services:
       - "traefik.http.routers.plugin.rule=PathPrefix(`/api/v1/webhooks`) || PathRegexp(`^/api/v1/projects/[^/]+/webhooks`)"
       - "traefik.http.routers.plugin.priority=100"
       - traefik.http.services.plugin.loadbalancer.server.port=8006
+    networks:
+      - teamboard-net
+
+  boardregistry:
+    build:
+      context: .
+      dockerfile: services/boardregistry/Dockerfile
+      target: production
+    environment:
+      SERVICE_NAME: boardregistry-service
+      SERVICE_PORT: "8007"
+      LOG_LEVEL: info
+      DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/boardregistry_db?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      RABBITMQ_EXCHANGE: teamboard.events
+      SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8007/healthz/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.boardregistry.rule=PathPrefix(`/api/v1/board-types`)"
+      - traefik.http.services.boardregistry.loadbalancer.server.port=8007
     networks:
       - teamboard-net
 
