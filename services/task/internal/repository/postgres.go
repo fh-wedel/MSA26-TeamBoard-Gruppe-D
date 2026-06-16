@@ -37,8 +37,8 @@ func (r *postgresRepo) WithTransaction(ctx context.Context, fn func(context.Cont
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
-func (r *postgresRepo) CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description string, status domain.Status, priority domain.Priority, assigneeID *uuid.UUID, dueDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*domain.Task, error) {
-	t, err := r.q.CreateTask(ctx, id, boardID, projectID, columnID, title, description, string(status), string(priority), assigneeID, dueDate, labels, position, createdBy)
+func (r *postgresRepo) CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description string, status domain.Status, priority domain.Priority, assigneeID *uuid.UUID, dueDate, startDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*domain.Task, error) {
+	t, err := r.q.CreateTask(ctx, id, boardID, projectID, columnID, title, description, string(status), string(priority), assigneeID, dueDate, startDate, labels, position, createdBy)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (r *postgresRepo) UpdateTask(ctx context.Context, id uuid.UUID, patch domai
 	if patch.Labels != nil {
 		labelsArg = *patch.Labels
 	}
-	t, err := r.q.UpdateTask(ctx, id, patch.Title, patch.Description, priority, patch.DueDateSet, patch.DueDate, labelsArg)
+	t, err := r.q.UpdateTask(ctx, id, patch.Title, patch.Description, priority, patch.DueDateSet, patch.DueDate, patch.StartDateSet, patch.StartDate, labelsArg)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrTaskNotFound
@@ -417,7 +417,7 @@ func mapTask(t *db.Task) *domain.Task {
 		ID: t.ID, BoardID: t.BoardID, ProjectID: t.ProjectID, ColumnID: t.ColumnID,
 		Title: t.Title, Description: t.Description,
 		Status: domain.Status(t.Status), Priority: domain.Priority(t.Priority),
-		AssigneeID: t.AssigneeID, DueDate: t.DueDate,
+		AssigneeID: t.AssigneeID, DueDate: t.DueDate, StartDate: t.StartDate,
 		Labels: t.Labels, Position: t.Position,
 		CreatedBy: t.CreatedBy, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, DeletedAt: t.DeletedAt,
 	}

@@ -18,13 +18,13 @@ type DBTX interface {
 
 type Querier interface {
 	// Tasks
-	CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description, status, priority string, assigneeID *uuid.UUID, dueDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*Task, error)
+	CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description, status, priority string, assigneeID *uuid.UUID, dueDate, startDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*Task, error)
 	GetTask(ctx context.Context, id uuid.UUID) (*Task, error)
 	GetTaskWithCounts(ctx context.Context, id uuid.UUID) (*TaskWithCounts, error)
 	ListTasksByBoard(ctx context.Context, boardID uuid.UUID, statusFilter *string, assigneeFilter *uuid.UUID, columnFilter *uuid.UUID, labelFilter *string, cursorPos *string, limit int) ([]*Task, error)
 	GetLastPositionInColumn(ctx context.Context, boardID uuid.UUID, columnID *uuid.UUID) (string, error)
 	GetPositionsByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error)
-	UpdateTask(ctx context.Context, id uuid.UUID, title, description, priority *string, dueDateSet bool, dueDate *time.Time, labels []string) (*Task, error)
+	UpdateTask(ctx context.Context, id uuid.UUID, title, description, priority *string, dueDateSet bool, dueDate *time.Time, startDateSet bool, startDate *time.Time, labels []string) (*Task, error)
 	MoveTask(ctx context.Context, id, columnID uuid.UUID, position, status string) (*Task, error)
 	AssignTask(ctx context.Context, id uuid.UUID, assigneeID *uuid.UUID) (*Task, error)
 	SoftDeleteTask(ctx context.Context, id uuid.UUID) error

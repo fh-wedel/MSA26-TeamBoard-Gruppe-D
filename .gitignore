@@ -44,3 +44,5 @@ tmp/
 
 # Logs
 *.log
+
+.claude/*local*

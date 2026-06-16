@@ -27,6 +27,7 @@ type BoardTypeDef struct {
 	DefaultColumns []ColumnDef
 	DefaultConfig  map[string]any
 	ConfigSchema   map[string]any // JSON Schema used to validate board config
+	Presentation   map[string]any // declarative rendering hints (see validatePresentation)
 	BuiltIn        bool
 	CreatedBy      *uuid.UUID
 	CreatedAt      time.Time
@@ -40,6 +41,7 @@ type RegisterInput struct {
 	DefaultColumns []ColumnDef
 	DefaultConfig  map[string]any
 	ConfigSchema   map[string]any
+	Presentation   map[string]any
 	CreatedBy      *uuid.UUID
 }
 
@@ -49,6 +51,7 @@ type UpdatePatch struct {
 	DefaultColumns *[]ColumnDef
 	DefaultConfig  *map[string]any
 	ConfigSchema   *map[string]any
+	Presentation   *map[string]any
 }
 
 // ValidStatuses must match the task service's status set (see services/task status_mapping.go).

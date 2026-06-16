@@ -22,6 +22,7 @@ export const tasksApi = {
     column_id?: string
     assignee_id?: string
     due_date?: string
+    start_date?: string
     labels?: string[]
   }) => api.post<ApiItem<Task>>(`/boards/${boardId}/tasks`, data),
 
@@ -30,6 +31,7 @@ export const tasksApi = {
     description?: string
     priority?: Priority
     due_date?: string | null
+    start_date?: string | null
     labels?: string[]
   }) => api.patch<ApiItem<Task>>(`/tasks/${taskId}`, patch),
 

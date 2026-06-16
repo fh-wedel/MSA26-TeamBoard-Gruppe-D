@@ -24,6 +24,7 @@ type registerRequest struct {
 	DefaultColumns []columnDefDTO `json:"default_columns"`
 	DefaultConfig  map[string]any `json:"default_config"`
 	ConfigSchema   map[string]any `json:"config_schema"`
+	Presentation   map[string]any `json:"presentation"`
 }
 
 type updateRequest struct {
@@ -32,6 +33,7 @@ type updateRequest struct {
 	DefaultColumns *[]columnDefDTO `json:"default_columns"`
 	DefaultConfig  *map[string]any `json:"default_config"`
 	ConfigSchema   *map[string]any `json:"config_schema"`
+	Presentation   *map[string]any `json:"presentation"`
 }
 
 // ── Responses ─────────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ type boardTypeResponse struct {
 	DefaultColumns []columnDefDTO `json:"default_columns"`
 	DefaultConfig  map[string]any `json:"default_config"`
 	ConfigSchema   map[string]any `json:"config_schema"`
+	Presentation   map[string]any `json:"presentation"`
 	BuiltIn        bool           `json:"built_in"`
 	CreatedBy      *uuid.UUID     `json:"created_by,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
@@ -75,6 +78,7 @@ func toResponse(d *domain.BoardTypeDef) boardTypeResponse {
 		DefaultColumns: fromColumnDefs(d.DefaultColumns),
 		DefaultConfig:  d.DefaultConfig,
 		ConfigSchema:   d.ConfigSchema,
+		Presentation:   d.Presentation,
 		BuiltIn:        d.BuiltIn,
 		CreatedBy:      d.CreatedBy,
 		CreatedAt:      d.CreatedAt,

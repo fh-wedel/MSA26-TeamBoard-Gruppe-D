@@ -1,22 +1,18 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Kanban, Calendar, ListTodo, Plus, Users, Settings, ChevronRight, Mail, Clock } from 'lucide-react'
+import { Kanban, Plus, Users, Settings, ChevronRight, Mail, Clock } from 'lucide-react'
 import { projectsApi } from '../../api/projects'
 import { invitationsApi } from '../../api/invitations'
-import type { BoardType } from '../../api/types'
+import type { BoardTypeDef } from '../../api/types'
 import { formatDistanceToNow } from 'date-fns'
+import SchemaForm from '../../components/board/SchemaForm'
+import { useBoardTypes } from '../../hooks/useBoardTypes'
 
-const BOARD_TYPE_ICONS: Record<BoardType, React.ReactNode> = {
-  kanban:   <Kanban size={16} />,
-  scrum:    <ListTodo size={16} />,
-  calendar: <Calendar size={16} />,
-}
-
-const DEFAULT_COLUMNS: Record<BoardType, { name: string; position: number }[]> = {
-  kanban:   [{ name: 'Backlog', position: 0 }, { name: 'In Progress', position: 1 }, { name: 'Review', position: 2 }, { name: 'Done', position: 3 }],
-  scrum:    [{ name: 'Sprint Backlog', position: 0 }, { name: 'In Progress', position: 1 }, { name: 'Testing', position: 2 }, { name: 'Done', position: 3 }],
-  calendar: [],
+// Registry icons are emoji strings; fall back to a Lucide glyph when absent.
+function BoardTypeIcon({ icon, size = 16 }: { icon?: string; size?: number }) {
+  if (icon && icon.trim() !== '') return <span style={{ fontSize: size }}>{icon}</span>
+  return <Kanban size={size} />
 }
 
 function InviteModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
@@ -76,19 +72,37 @@ function InviteModal({ projectId, onClose }: { projectId: string; onClose: () =>
 
 function CreateBoardModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const [name, setName] = useState('')
-  const [type, setType] = useState<BoardType>('kanban')
+  const [type, setType] = useState<string>('')
+  const [config, setConfig] = useState<Record<string, unknown>>({})
+  const [error, setError] = useState('')
   const qc = useQueryClient()
 
+  const { data: typesData, isLoading: typesLoading } = useBoardTypes()
+  const boardTypes = typesData?.data ?? []
+  const selected: BoardTypeDef | undefined = boardTypes.find((t) => t.type === type)
+
+  // When a type is picked, seed the config form with its default_config.
+  function pickType(def: BoardTypeDef) {
+    setType(def.type)
+    setConfig({ ...(def.default_config ?? {}) })
+  }
+
   const create = useMutation({
-    mutationFn: () => projectsApi.createBoard(projectId, name, type, DEFAULT_COLUMNS[type]),
+    mutationFn: () => projectsApi.createBoard(projectId, name, type, config),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['boards', projectId] }); onClose() },
+    onError: (e: Error) => setError(e.message),
   })
+
+  const hasSchemaFields = selected && Object.keys(selected.config_schema?.properties ?? {}).length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg-0/80 backdrop-blur-sm animate-fade-in">
-      <div className="card w-full max-w-md p-6 animate-scale-in">
+      <div className="card w-full max-w-md p-6 animate-scale-in max-h-[90vh] overflow-y-auto">
         <h2 className="text-base font-semibold text-text-0 mb-5">New Board</h2>
-        <form onSubmit={(e) => { e.preventDefault(); create.mutate() }} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); setError(''); create.mutate() }} className="space-y-4">
+          {error && (
+            <div className="bg-danger/10 border border-danger/30 text-danger text-xs px-3 py-2 rounded">{error}</div>
+          )}
           <div>
             <label className="label block mb-1.5">Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)}
@@ -96,23 +110,38 @@ function CreateBoardModal({ projectId, onClose }: { projectId: string; onClose: 
           </div>
           <div>
             <label className="label block mb-2">Type</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['kanban', 'scrum', 'calendar'] as BoardType[]).map((t) => (
-                <button key={t} type="button" onClick={() => setType(t)}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded border text-xs font-medium transition-colors ${
-                    type === t
-                      ? 'bg-accent/10 border-accent text-accent'
-                      : 'bg-bg-3 border-border-2 text-text-2 hover:border-border-3'
-                  }`}>
-                  {BOARD_TYPE_ICONS[t]}
-                  <span className="capitalize">{t}</span>
-                </button>
-              ))}
-            </div>
+            {typesLoading ? (
+              <p className="text-xs text-text-3">Loading board types…</p>
+            ) : boardTypes.length === 0 ? (
+              <p className="text-xs text-text-3">No board types available.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {boardTypes.map((t) => (
+                  <button key={t.type} type="button" onClick={() => pickType(t)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded border text-xs font-medium transition-colors ${
+                      type === t.type
+                        ? 'bg-accent/10 border-accent text-accent'
+                        : 'bg-bg-3 border-border-2 text-text-2 hover:border-border-3'
+                    }`}>
+                    <BoardTypeIcon icon={t.icon} size={18} />
+                    <span className="text-center leading-tight">{t.display_name || t.type}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Config form driven by the selected type's JSON-Schema. */}
+          {hasSchemaFields && selected && (
+            <div className="border-t border-border-1 pt-4">
+              <p className="label mb-3">Configuration</p>
+              <SchemaForm schema={selected.config_schema} value={config} onChange={setConfig} />
+            </div>
+          )}
+
           <div className="flex gap-2 justify-end pt-2">
             <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-            <button type="submit" disabled={create.isPending || !name.trim()} className="btn-primary">
+            <button type="submit" disabled={create.isPending || !name.trim() || !type} className="btn-primary">
               {create.isPending ? 'Creating…' : 'Create board'}
             </button>
           </div>
@@ -150,6 +179,9 @@ export default function ProjectPage() {
     queryFn: () => invitationsApi.list(projectId!),
     enabled: !!projectId && activeTab === 'members',
   })
+
+  const { data: typesData } = useBoardTypes()
+  const boardTypeByType = new Map((typesData?.data ?? []).map((t) => [t.type, t]))
 
   const [showInviteModal, setShowInviteModal] = useState(false)
 
@@ -200,11 +232,11 @@ export default function ProjectPage() {
               <Link key={board.id} to={`/projects/${projectId}/boards/${board.id}`}
                 className="card p-5 hover:border-border-3 hover:bg-bg-3 transition-all group">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="text-accent">{BOARD_TYPE_ICONS[board.type as BoardType] ?? <Kanban size={16} />}</div>
+                  <div className="text-accent"><BoardTypeIcon icon={boardTypeByType.get(board.type)?.icon} /></div>
                   <ChevronRight size={14} className="text-text-3 group-hover:text-text-1 transition-colors" />
                 </div>
                 <h3 className="font-medium text-text-0 text-sm mb-1">{board.name}</h3>
-                <p className="text-xs text-text-3 capitalize">{board.type}</p>
+                <p className="text-xs text-text-3 capitalize">{boardTypeByType.get(board.type)?.display_name ?? board.type}</p>
                 {board.columns && (
                   <div className="flex gap-1 mt-3 flex-wrap">
                     {board.columns.map((col) => (

@@ -68,7 +68,7 @@
 ### UC-1: Task erstellen
 **Akteur:** User mit `task:create`  
 **Ablauf:**
-1. `POST /boards/{boardId}/tasks` mit `title`, `column_id`, optional `description`, `assignee_id`, `due_date`, `priority`, `labels`
+1. `POST /boards/{boardId}/tasks` mit `title`, `column_id`, optional `description`, `assignee_id`, `start_date`, `due_date`, `priority`, `labels`
 2. Permission-Check beim Project Service (Board → Project-Lookup über lokales Replikat)
 3. Validierung: `column_id` gehört zu `board_id`
 4. `position` berechnen (Anhängen ans Ende der Spalte, fractional rank)
@@ -234,6 +234,7 @@ CREATE TABLE tasks (
     priority        TEXT NOT NULL DEFAULT 'medium',
     assignee_id     UUID NULL,
     due_date        TIMESTAMPTZ NULL,
+    start_date      TIMESTAMPTZ NULL,                       -- optional; start..due drives the timeline (Gantt) view
     labels          TEXT[] NOT NULL DEFAULT '{}',
     position        TEXT NOT NULL,                          -- fractional rank, sortable lexicographically
     created_by      UUID NOT NULL,
@@ -1113,6 +1114,7 @@ components:
           default: medium
         assignee_id: { type: string, format: uuid, nullable: true }
         due_date: { type: string, format: date-time, nullable: true }
+        start_date: { type: string, format: date-time, nullable: true }
         labels:
           type: array
           items: { type: string, maxLength: 50 }
@@ -1124,6 +1126,7 @@ components:
         description: { type: string, maxLength: 10000 }
         priority: { type: string, enum: [low, medium, high, critical] }
         due_date: { type: string, format: date-time, nullable: true }
+        start_date: { type: string, format: date-time, nullable: true }
         labels:
           type: array
           items: { type: string, maxLength: 50 }

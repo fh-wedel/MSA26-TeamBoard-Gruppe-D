@@ -148,13 +148,22 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
               </div>
             </div>
 
-            {/* Due date */}
-            <div>
-              <p className="label mb-1.5 flex items-center gap-1"><Clock size={11} /> Due date</p>
-              <input type="date"
-                value={task.due_date ? task.due_date.slice(0, 10) : ''}
-                onChange={(e) => updateTask.mutate({ due_date: e.target.value || null })}
-                className="input-base w-full text-xs" />
+            {/* Start / Due dates */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="label mb-1.5 flex items-center gap-1"><Clock size={11} /> Start date</p>
+                <input type="date"
+                  value={task.start_date ? task.start_date.slice(0, 10) : ''}
+                  onChange={(e) => updateTask.mutate({ start_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  className="input-base w-full text-xs" />
+              </div>
+              <div>
+                <p className="label mb-1.5 flex items-center gap-1"><Clock size={11} /> Due date</p>
+                <input type="date"
+                  value={task.due_date ? task.due_date.slice(0, 10) : ''}
+                  onChange={(e) => updateTask.mutate({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  className="input-base w-full text-xs" />
+              </div>
             </div>
 
             {/* Labels */}

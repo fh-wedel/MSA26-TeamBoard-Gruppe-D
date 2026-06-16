@@ -38,7 +38,7 @@ type Repository interface {
 	WithTransaction(ctx context.Context, fn func(context.Context, Repository) error) error
 
 	// Tasks
-	CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description string, status Status, priority Priority, assigneeID *uuid.UUID, dueDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*Task, error)
+	CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description string, status Status, priority Priority, assigneeID *uuid.UUID, dueDate, startDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*Task, error)
 	GetTask(ctx context.Context, id uuid.UUID) (*Task, error)
 	GetTaskWithCounts(ctx context.Context, id uuid.UUID) (*Task, error)
 	ListTasksByBoard(ctx context.Context, boardID uuid.UUID, filter TaskFilter, cursor *string, limit int) ([]*Task, error)

@@ -55,13 +55,13 @@ func (r *fakeRepo) WithTransaction(ctx context.Context, fn func(context.Context,
 	return fn(ctx, r)
 }
 
-func (r *fakeRepo) CreateTask(_ context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description string, status domain.Status, priority domain.Priority, assigneeID *uuid.UUID, dueDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*domain.Task, error) {
+func (r *fakeRepo) CreateTask(_ context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description string, status domain.Status, priority domain.Priority, assigneeID *uuid.UUID, dueDate, startDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*domain.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	t := &domain.Task{
 		ID: id, BoardID: boardID, ProjectID: projectID, ColumnID: columnID,
 		Title: title, Description: description, Status: status, Priority: priority,
-		AssigneeID: assigneeID, DueDate: dueDate, Labels: labels,
+		AssigneeID: assigneeID, DueDate: dueDate, StartDate: startDate, Labels: labels,
 		Position: position, CreatedBy: createdBy,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}

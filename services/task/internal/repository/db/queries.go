@@ -14,18 +14,18 @@ import (
 
 const createTask = `
 INSERT INTO tasks (id, board_id, project_id, column_id, title, description,
-    status, priority, assignee_id, due_date, labels, position, created_by)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    status, priority, assignee_id, due_date, start_date, labels, position, created_by)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 RETURNING id,board_id,project_id,column_id,title,description,status,priority,
-          assignee_id,due_date,labels,position,created_by,created_at,updated_at,deleted_at`
+          assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at`
 
-func (q *queries) CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description, status, priority string, assigneeID *uuid.UUID, dueDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*Task, error) {
-	return scanTask(q.db.QueryRow(ctx, createTask, id, boardID, projectID, columnID, title, description, status, priority, assigneeID, dueDate, labels, position, createdBy))
+func (q *queries) CreateTask(ctx context.Context, id, boardID, projectID uuid.UUID, columnID *uuid.UUID, title, description, status, priority string, assigneeID *uuid.UUID, dueDate, startDate *time.Time, labels []string, position string, createdBy uuid.UUID) (*Task, error) {
+	return scanTask(q.db.QueryRow(ctx, createTask, id, boardID, projectID, columnID, title, description, status, priority, assigneeID, dueDate, startDate, labels, position, createdBy))
 }
 
 const getTask = `
 SELECT id,board_id,project_id,column_id,title,description,status,priority,
-       assignee_id,due_date,labels,position,created_by,created_at,updated_at,deleted_at
+       assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at
 FROM tasks WHERE id=$1 AND deleted_at IS NULL`
 
 func (q *queries) GetTask(ctx context.Context, id uuid.UUID) (*Task, error) {
@@ -34,7 +34,7 @@ func (q *queries) GetTask(ctx context.Context, id uuid.UUID) (*Task, error) {
 
 const getTaskWithCounts = `
 SELECT t.id,t.board_id,t.project_id,t.column_id,t.title,t.description,t.status,t.priority,
-       t.assignee_id,t.due_date,t.labels,t.position,t.created_by,t.created_at,t.updated_at,t.deleted_at,
+       t.assignee_id,t.due_date,t.start_date,t.labels,t.position,t.created_by,t.created_at,t.updated_at,t.deleted_at,
        (SELECT COUNT(*) FROM task_comments c WHERE c.task_id=t.id AND c.deleted_at IS NULL)::INT,
        (SELECT COUNT(*) FROM task_attachments a WHERE a.task_id=t.id)::INT
 FROM tasks t WHERE t.id=$1 AND t.deleted_at IS NULL`
@@ -44,7 +44,7 @@ func (q *queries) GetTaskWithCounts(ctx context.Context, id uuid.UUID) (*TaskWit
 	t := &TaskWithCounts{}
 	err := row.Scan(&t.ID, &t.BoardID, &t.ProjectID, &t.ColumnID,
 		&t.Title, &t.Description, &t.Status, &t.Priority,
-		&t.AssigneeID, &t.DueDate, &t.Labels, &t.Position,
+		&t.AssigneeID, &t.DueDate, &t.StartDate, &t.Labels, &t.Position,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 		&t.CommentCount, &t.AttachmentCount)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -55,7 +55,7 @@ func (q *queries) GetTaskWithCounts(ctx context.Context, id uuid.UUID) (*TaskWit
 
 const listTasksByBoard = `
 SELECT id,board_id,project_id,column_id,title,description,status,priority,
-       assignee_id,due_date,labels,position,created_by,created_at,updated_at,deleted_at
+       assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at
 FROM tasks
 WHERE board_id=$1 AND deleted_at IS NULL
   AND ($2::TEXT IS NULL OR status=$2)
@@ -119,14 +119,15 @@ UPDATE tasks SET
     description = COALESCE($3,description),
     priority    = COALESCE($4,priority),
     due_date    = CASE WHEN $5::BOOLEAN THEN $6 ELSE due_date END,
-    labels      = COALESCE($7,labels),
+    start_date  = CASE WHEN $7::BOOLEAN THEN $8 ELSE start_date END,
+    labels      = COALESCE($9,labels),
     updated_at  = NOW()
 WHERE id=$1 AND deleted_at IS NULL
 RETURNING id,board_id,project_id,column_id,title,description,status,priority,
-          assignee_id,due_date,labels,position,created_by,created_at,updated_at,deleted_at`
+          assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at`
 
-func (q *queries) UpdateTask(ctx context.Context, id uuid.UUID, title, description, priority *string, dueDateSet bool, dueDate *time.Time, labels []string) (*Task, error) {
-	return scanTask(q.db.QueryRow(ctx, updateTask, id, title, description, priority, dueDateSet, dueDate, labels))
+func (q *queries) UpdateTask(ctx context.Context, id uuid.UUID, title, description, priority *string, dueDateSet bool, dueDate *time.Time, startDateSet bool, startDate *time.Time, labels []string) (*Task, error) {
+	return scanTask(q.db.QueryRow(ctx, updateTask, id, title, description, priority, dueDateSet, dueDate, startDateSet, startDate, labels))
 }
 
 const moveTask = `
@@ -508,7 +509,7 @@ func scanTask(r pgx.Row) (*Task, error) {
 	t := &Task{}
 	err := r.Scan(&t.ID, &t.BoardID, &t.ProjectID, &t.ColumnID,
 		&t.Title, &t.Description, &t.Status, &t.Priority,
-		&t.AssigneeID, &t.DueDate, &t.Labels, &t.Position,
+		&t.AssigneeID, &t.DueDate, &t.StartDate, &t.Labels, &t.Position,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pgx.ErrNoRows
@@ -520,7 +521,7 @@ func scanTaskRow(r pgx.Rows) (*Task, error) {
 	t := &Task{}
 	err := r.Scan(&t.ID, &t.BoardID, &t.ProjectID, &t.ColumnID,
 		&t.Title, &t.Description, &t.Status, &t.Priority,
-		&t.AssigneeID, &t.DueDate, &t.Labels, &t.Position,
+		&t.AssigneeID, &t.DueDate, &t.StartDate, &t.Labels, &t.Position,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt)
 	return t, err
 }

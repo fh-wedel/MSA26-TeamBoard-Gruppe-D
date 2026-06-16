@@ -49,6 +49,7 @@ func (h *handlers) register(w http.ResponseWriter, r *http.Request) {
 		DefaultColumns: toColumnDefs(req.DefaultColumns),
 		DefaultConfig:  req.DefaultConfig,
 		ConfigSchema:   req.ConfigSchema,
+		Presentation:   req.Presentation,
 		CreatedBy:      &userID,
 	})
 	if err != nil {
@@ -69,6 +70,7 @@ func (h *handlers) update(w http.ResponseWriter, r *http.Request) {
 		Icon:          req.Icon,
 		DefaultConfig: req.DefaultConfig,
 		ConfigSchema:  req.ConfigSchema,
+		Presentation:  req.Presentation,
 	}
 	if req.DefaultColumns != nil {
 		cols := toColumnDefs(*req.DefaultColumns)

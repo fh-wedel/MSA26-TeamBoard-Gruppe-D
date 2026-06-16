@@ -19,7 +19,7 @@ func NewService(repo Repository) BoardTypeService {
 var _ BoardTypeService = (*service)(nil)
 
 func (s *service) Register(ctx context.Context, in RegisterInput) (*BoardTypeDef, error) {
-	if err := validateDefinition(in.Type, in.DisplayName, in.DefaultColumns, in.DefaultConfig, in.ConfigSchema); err != nil {
+	if err := validateDefinition(in.Type, in.DisplayName, in.DefaultColumns, in.DefaultConfig, in.ConfigSchema, in.Presentation); err != nil {
 		return nil, err
 	}
 	if existing, _ := s.repo.GetBoardType(ctx, in.Type); existing != nil {
@@ -34,6 +34,7 @@ func (s *service) Register(ctx context.Context, in RegisterInput) (*BoardTypeDef
 		DefaultColumns: in.DefaultColumns,
 		DefaultConfig:  orEmpty(in.DefaultConfig),
 		ConfigSchema:   orEmpty(in.ConfigSchema),
+		Presentation:   orEmpty(in.Presentation),
 		BuiltIn:        false,
 		CreatedBy:      in.CreatedBy,
 	}
@@ -76,8 +77,11 @@ func (s *service) Update(ctx context.Context, typ string, patch UpdatePatch) (*B
 	if patch.ConfigSchema != nil {
 		existing.ConfigSchema = orEmpty(*patch.ConfigSchema)
 	}
+	if patch.Presentation != nil {
+		existing.Presentation = orEmpty(*patch.Presentation)
+	}
 
-	if err := validateDefinition(existing.Type, existing.DisplayName, existing.DefaultColumns, existing.DefaultConfig, existing.ConfigSchema); err != nil {
+	if err := validateDefinition(existing.Type, existing.DisplayName, existing.DefaultColumns, existing.DefaultConfig, existing.ConfigSchema, existing.Presentation); err != nil {
 		return nil, err
 	}
 

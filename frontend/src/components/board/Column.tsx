@@ -5,16 +5,17 @@ import { Plus } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { tasksApi } from '../../api/tasks'
 import TaskCard from './TaskCard'
-import type { Column as ColType, Task } from '../../api/types'
+import type { CardSpec, Column as ColType, Task } from '../../api/types'
 import clsx from 'clsx'
 
 interface Props {
   column: ColType
   tasks: Task[]
   boardId: string
+  card?: CardSpec
 }
 
-export default function Column({ column, tasks, boardId }: Props) {
+export default function Column({ column, tasks, boardId, card }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id })
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
@@ -48,7 +49,7 @@ export default function Column({ column, tasks, boardId }: Props) {
         <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
+              <TaskCard key={task.id} task={task} card={card} />
             ))}
           </div>
         </SortableContext>

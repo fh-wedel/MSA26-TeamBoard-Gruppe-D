@@ -1,27 +1,19 @@
-import { useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
-  type DragEndEvent, type DragStartEvent, closestCorners,
-} from '@dnd-kit/core'
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { Info, Plus } from 'lucide-react'
 import { boardsApi } from '../../api/projects'
 import { tasksApi } from '../../api/tasks'
 import { useUIStore } from '../../stores/uiStore'
-import Column from '../../components/board/Column'
-import TaskCard from '../../components/board/TaskCard'
+import { useBoardType } from '../../hooks/useBoardTypes'
+import { resolveView } from '../../components/board/views'
+import CreateTaskModal from '../../components/board/CreateTaskModal'
 import TaskDetailPanel from '../../components/task/TaskDetailPanel'
-import type { Task } from '../../api/types'
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
   const { selectedTaskId, selectTask } = useUIStore()
-  const qc = useQueryClient()
-  const [activeTask, setActiveTask] = useState<Task | null>(null)
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  )
+  const [showCreateTask, setShowCreateTask] = useState(false)
 
   const { data: boardData } = useQuery({
     queryKey: ['board', boardId],
@@ -35,77 +27,42 @@ export default function BoardPage() {
     enabled: !!boardId,
   })
 
-  const moveTask = useMutation({
-    mutationFn: ({ taskId, columnId, beforeId }: { taskId: string; columnId: string; beforeId?: string }) =>
-      tasksApi.move(taskId, columnId, beforeId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
-  })
-
   const board = boardData?.data
-  const allTasks = tasksData?.data ?? []
-  const columns = board?.columns ?? []
+  const tasks = tasksData?.data ?? []
 
-  function tasksByColumn(columnId: string) {
-    return allTasks.filter(t => t.column_id === columnId)
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    const task = allTasks.find(t => t.id === event.active.id)
-    if (task) setActiveTask(task)
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveTask(null)
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const taskId = String(active.id)
-    const task = allTasks.find(t => t.id === taskId)
-    if (!task) return
-
-    // over could be a column ID or a task ID
-    const overTask = allTasks.find(t => t.id === over.id)
-    const targetColumnId = overTask ? overTask.column_id! : String(over.id)
-
-    if (!targetColumnId) return
-    moveTask.mutate({ taskId, columnId: targetColumnId, beforeId: overTask?.id })
-  }
+  const boardType = useBoardType(board?.type)
+  const presentation = boardType?.presentation
+  const { Component: View, known } = resolveView(presentation?.view)
 
   if (!board) return null
+
+  const viewLabel = presentation?.view ?? 'board'
 
   return (
     <div className="h-full flex flex-col">
       {/* Board toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border-1 flex-shrink-0">
-        <span className="text-xs text-text-3">{allTasks.length} tasks</span>
+        <span className="text-xs text-text-3">{tasks.length} tasks</span>
+        <span className="text-[11px] text-text-3 capitalize bg-bg-3 px-1.5 py-0.5 rounded">{viewLabel} view</span>
+        {!known && presentation?.view && (
+          <span className="flex items-center gap-1 text-[11px] text-amber">
+            <Info size={11} /> Unknown view "{presentation.view}" — showing board
+          </span>
+        )}
+        <button onClick={() => setShowCreateTask(true)} className="btn-primary flex items-center gap-1.5 ml-auto py-1 px-3 text-xs">
+          <Plus size={13} /> New task
+        </button>
       </div>
 
-      {/* Columns */}
-      <DndContext sensors={sensors} collisionDetection={closestCorners}
-        onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-5 p-6 overflow-x-auto flex-1 items-start">
-          {columns
-            .sort((a, b) => a.position - b.position)
-            .map((col) => (
-              <Column
-                key={col.id}
-                column={col}
-                tasks={tasksByColumn(col.id)}
-                boardId={boardId!}
-              />
-            ))}
-        </div>
+      {/* Selected renderer */}
+      <View board={board} tasks={tasks} presentation={presentation} />
 
-        <DragOverlay>
-          {activeTask && (
-            <div className="rotate-1 scale-105">
-              <TaskCard task={activeTask} />
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+      {/* Create task (view-agnostic) */}
+      {showCreateTask && (
+        <CreateTaskModal board={board} onClose={() => setShowCreateTask(false)} />
+      )}
 
-      {/* Task detail slide-over */}
+      {/* Task detail slide-over (shared across all views) */}
       {selectedTaskId && (
         <TaskDetailPanel taskId={selectedTaskId} onClose={() => selectTask(null)} />
       )}

@@ -17,6 +17,7 @@ type Task struct {
 	Priority    Priority
 	AssigneeID  *uuid.UUID
 	DueDate     *time.Time
+	StartDate   *time.Time
 	Labels      []string
 	Position    string
 	CreatedBy   uuid.UUID
@@ -145,16 +146,19 @@ type CreateTaskInput struct {
 	Priority    Priority
 	AssigneeID  *uuid.UUID
 	DueDate     *time.Time
+	StartDate   *time.Time
 	Labels      []string
 }
 
 type TaskPatch struct {
-	Title       *string
-	Description *string
-	Priority    *Priority
-	DueDate     *time.Time
-	DueDateSet  bool // true when DueDate is explicitly present in the patch (even if nil)
-	Labels      *[]string
+	Title        *string
+	Description  *string
+	Priority     *Priority
+	DueDate      *time.Time
+	DueDateSet   bool // true when DueDate is explicitly present in the patch (even if nil)
+	StartDate    *time.Time
+	StartDateSet bool // true when StartDate is explicitly present in the patch (even if nil)
+	Labels       *[]string
 }
 
 type TaskFilter struct {

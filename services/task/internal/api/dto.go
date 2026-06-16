@@ -16,6 +16,7 @@ type createTaskRequest struct {
 	Priority    string     `json:"priority"`
 	AssigneeID  *uuid.UUID `json:"assignee_id"`
 	DueDate     *time.Time `json:"due_date"`
+	StartDate   *time.Time `json:"start_date"`
 	Labels      []string   `json:"labels"`
 }
 
@@ -54,6 +55,7 @@ type taskResponse struct {
 	Priority        string     `json:"priority"`
 	AssigneeID      *uuid.UUID `json:"assignee_id"`
 	DueDate         *time.Time `json:"due_date"`
+	StartDate       *time.Time `json:"start_date"`
 	Labels          []string   `json:"labels"`
 	Position        string     `json:"position"`
 	CreatedBy       uuid.UUID  `json:"created_by"`
@@ -109,6 +111,7 @@ func mapTask(t *domain.Task) taskResponse {
 		Priority:        string(t.Priority),
 		AssigneeID:      t.AssigneeID,
 		DueDate:         t.DueDate,
+		StartDate:       t.StartDate,
 		Labels:          t.Labels,
 		Position:        t.Position,
 		CreatedBy:       t.CreatedBy,

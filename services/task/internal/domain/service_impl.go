@@ -94,7 +94,7 @@ func (s *service) CreateTask(ctx context.Context, requester uuid.UUID, input Cre
 		task, txErr = tx.CreateTask(ctx,
 			uuid.New(), input.BoardID, board.ProjectID, input.ColumnID,
 			input.Title, input.Description, status, input.Priority,
-			input.AssigneeID, input.DueDate, input.Labels, pos, requester)
+			input.AssigneeID, input.DueDate, input.StartDate, input.Labels, pos, requester)
 		if txErr != nil {
 			return txErr
 		}
@@ -613,6 +613,9 @@ func buildUpdateDiff(old *Task, patch TaskPatch) map[string]any {
 	}
 	if patch.DueDateSet {
 		diff["due_date"] = map[string]any{"from": old.DueDate, "to": patch.DueDate}
+	}
+	if patch.StartDateSet {
+		diff["start_date"] = map[string]any{"from": old.StartDate, "to": patch.StartDate}
 	}
 	if patch.Labels != nil {
 		diff["labels"] = map[string]any{"from": old.Labels, "to": *patch.Labels}

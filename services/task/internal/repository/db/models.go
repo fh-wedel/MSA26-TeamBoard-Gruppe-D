@@ -17,6 +17,7 @@ type Task struct {
 	Priority    string
 	AssigneeID  *uuid.UUID
 	DueDate     *time.Time
+	StartDate   *time.Time
 	Labels      []string
 	Position    string
 	CreatedBy   uuid.UUID

@@ -234,6 +234,54 @@ func TestDelete_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
+func TestRegister_ValidPresentation(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo)
+	in := validInput("roadmap")
+	in.Presentation = map[string]any{
+		"view":        "calendar",
+		"view_config": map[string]any{"date_field": "due_date", "week_start": "monday"},
+		"card":        map[string]any{"fields": []any{"priority", "labels"}, "color_by": "priority"},
+	}
+	def, err := svc.Register(context.Background(), in)
+	require.NoError(t, err)
+	assert.Equal(t, "calendar", def.Presentation["view"])
+}
+
+func TestRegister_InvalidPresentation(t *testing.T) {
+	cases := map[string]map[string]any{
+		"unknown view":         {"view": "spreadsheet"},
+		"bad view_config key":  {"view": "calendar", "view_config": map[string]any{"group_by": "column"}},
+		"bad week_start":       {"view": "calendar", "view_config": map[string]any{"week_start": "tuesday"}},
+		"bad card color_by":    {"card": map[string]any{"color_by": "rainbow"}},
+		"unknown top-level key": {"layout": "grid"},
+	}
+	for name, pres := range cases {
+		t.Run(name, func(t *testing.T) {
+			svc := NewService(newFakeRepo())
+			in := validInput("roadmap")
+			in.Presentation = pres
+			_, err := svc.Register(context.Background(), in)
+			var de *Error
+			require.ErrorAs(t, err, &de)
+			assert.Equal(t, "validation_failed", de.Code)
+		})
+	}
+}
+
+func TestUpdate_PresentationValidated(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo)
+	_, err := svc.Register(context.Background(), validInput("roadmap"))
+	require.NoError(t, err)
+
+	bad := map[string]any{"view": "nope"}
+	_, err = svc.Update(context.Background(), "roadmap", UpdatePatch{Presentation: &bad})
+	var de *Error
+	require.ErrorAs(t, err, &de)
+	assert.Equal(t, "validation_failed", de.Code)
+}
+
 func TestUpdateAndDelete_CustomType(t *testing.T) {
 	repo := newFakeRepo()
 	svc := NewService(repo)

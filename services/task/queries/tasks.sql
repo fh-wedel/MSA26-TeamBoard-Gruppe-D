@@ -1,9 +1,9 @@
 -- name: CreateTask :one
 INSERT INTO tasks (
     id, board_id, project_id, column_id, title, description,
-    status, priority, assignee_id, due_date, labels, position, created_by
+    status, priority, assignee_id, due_date, start_date, labels, position, created_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
 RETURNING *;
 
@@ -20,7 +20,7 @@ WHERE t.id = $1 AND t.deleted_at IS NULL;
 
 -- name: ListTasksByBoard :many
 SELECT id, board_id, project_id, column_id, title, description,
-       status, priority, assignee_id, due_date, labels, position, created_by,
+       status, priority, assignee_id, due_date, start_date, labels, position, created_by,
        created_at, updated_at, deleted_at
 FROM tasks
 WHERE board_id = $1 AND deleted_at IS NULL
@@ -45,7 +45,8 @@ UPDATE tasks SET
     description = COALESCE($3, description),
     priority    = COALESCE($4, priority),
     due_date    = CASE WHEN $5::BOOLEAN THEN $6 ELSE due_date END,
-    labels      = COALESCE($7, labels),
+    start_date  = CASE WHEN $7::BOOLEAN THEN $8 ELSE start_date END,
+    labels      = COALESCE($9, labels),
     updated_at  = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

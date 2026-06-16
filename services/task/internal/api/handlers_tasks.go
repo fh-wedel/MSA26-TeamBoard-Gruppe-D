@@ -34,6 +34,7 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Priority:    domain.Priority(req.Priority),
 		AssigneeID:  req.AssigneeID,
 		DueDate:     req.DueDate,
+		StartDate:   req.StartDate,
 		Labels:      req.Labels,
 	}
 
@@ -244,6 +245,16 @@ func parseTaskPatch(body []byte) (domain.TaskPatch, error) {
 				return patch, err
 			}
 			patch.DueDate = &t
+		}
+	}
+	if v, ok := raw["start_date"]; ok {
+		patch.StartDateSet = true
+		if string(v) != "null" {
+			var t time.Time
+			if err := json.Unmarshal(v, &t); err != nil {
+				return patch, err
+			}
+			patch.StartDate = &t
 		}
 	}
 	if v, ok := raw["labels"]; ok {

@@ -41,15 +41,44 @@ Tabelle `board_types`:
 | `default_columns` | JSONB | Array `{name, position, wip_limit?, status}` |
 | `default_config` | JSONB | Typ-spezifische Default-Konfiguration |
 | `config_schema` | JSONB | JSON-Schema zur Validierung der Board-Config |
+| `presentation` | JSONB | Deklarative Rendering-Hints fürs Frontend (s. u.) |
 | `built_in` | BOOLEAN | Built-ins sind unveränderlich/nicht löschbar |
 | `created_by` | UUID NULL | Registrierender User |
 | `created_at`, `updated_at` | TIMESTAMPTZ | |
 
-Plus `outbox` (Outbox-Pattern). Built-in-Typen (kanban/scrum/calendar) werden per Seed-Migration
-angelegt (`0002_seed_builtin_types`).
+Plus `outbox` (Outbox-Pattern). Built-in-Typen (kanban/scrum/calendar/gantt) werden per
+Seed-Migrationen angelegt (`0002_seed_builtin_types`, `0004_seed_presentation`,
+`0005_calendar_default_column`).
 
 `status` ∈ {`open`, `in_progress`, `blocked`, `done`, `archived`} (muss zum Task-Service-Statusset
 passen).
+
+### 2.1 Presentation-Spec
+
+Das `presentation`-JSONB steuert **deklarativ**, wie ein Boardtyp im Frontend dargestellt wird —
+nicht nur *welche* View, sondern *wie* sie aussieht. Es wird gegen ein **host-definiertes
+Meta-Schema** validiert (anders als `config_schema`, das der Typ-Autor frei definiert). Siehe
+ADR 0002.
+
+```jsonc
+{
+  "view": "board",                 // board | calendar | timeline (eingebauter Renderer)
+  "view_config": { ... },          // renderer-spezifisch, deklarativ
+  "card": {                        // view-übergreifend: Task-Karten-Darstellung
+    "fields": ["priority","due_date","labels","comment_count","attachment_count"],
+    "color_by": "priority"         // priority | status | label
+  }
+}
+```
+
+Erlaubte `view_config`-Keys je View:
+- **board:** `group_by` (column|assignee|priority), `show_wip` (bool), `swimlane_by`
+- **calendar:** `date_field`, `week_start` (monday|sunday), `default_range` (month|week)
+- **timeline:** `start_field`, `end_field`, `group_by`, `color_by`
+
+Leere/unbekannte `view` → Frontend fällt auf das Spalten-Board zurück (mit Hinweis). Der
+`presentation.view`-Schalter ist der einzige Erweiterungspunkt: ein künftiges `view:"remote"`
+(Micro-Frontend) ließe sich ohne Modell-Umbau ergänzen.
 
 ---
 
@@ -98,6 +127,10 @@ Konsumiert: keine. Der Project-Service konsumiert die obigen Events zur Cache-In
 `validateDefinition` prüft Slug-Format, Display-Name-Länge, Spalten (Name, eindeutige Position,
 `status` im erlaubten Set, `wip_limit >= 0`), Kompilierbarkeit des `config_schema` und dass die
 `default_config` das Schema erfüllt (`santhosh-tekuri/jsonschema/v5`).
+
+`validatePresentation` prüft die optionale `presentation`-Spec gegen das host-definierte
+Meta-Schema: erlaubte `view`-Werte, je-View bekannte `view_config`-Keys, `week_start`/`color_by`-
+Enums sowie `card.fields`/`card.color_by`. Eine leere Spec ist gültig (Default `board`).
 
 ---
 

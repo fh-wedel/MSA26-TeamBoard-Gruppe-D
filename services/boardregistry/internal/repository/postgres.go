@@ -53,17 +53,18 @@ func (r *postgresRepo) CreateBoardType(ctx context.Context, def *domain.BoardTyp
 	cols, _ := json.Marshal(def.DefaultColumns)
 	cfg, _ := json.Marshal(def.DefaultConfig)
 	schema, _ := json.Marshal(def.ConfigSchema)
+	pres, _ := json.Marshal(def.Presentation)
 	const q = `INSERT INTO board_types
-	             (id, type, display_name, icon, default_columns, default_config, config_schema, built_in, created_by)
-	           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-	           RETURNING id, type, display_name, icon, default_columns, default_config, config_schema, built_in, created_by, created_at, updated_at`
+	             (id, type, display_name, icon, default_columns, default_config, config_schema, presentation, built_in, created_by)
+	           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	           RETURNING id, type, display_name, icon, default_columns, default_config, config_schema, presentation, built_in, created_by, created_at, updated_at`
 	row := r.db.QueryRow(ctx, q,
-		def.ID, def.Type, def.DisplayName, def.Icon, cols, cfg, schema, def.BuiltIn, def.CreatedBy)
+		def.ID, def.Type, def.DisplayName, def.Icon, cols, cfg, schema, pres, def.BuiltIn, def.CreatedBy)
 	return scanBoardType(row)
 }
 
 func (r *postgresRepo) GetBoardType(ctx context.Context, typ string) (*domain.BoardTypeDef, error) {
-	const q = `SELECT id, type, display_name, icon, default_columns, default_config, config_schema, built_in, created_by, created_at, updated_at
+	const q = `SELECT id, type, display_name, icon, default_columns, default_config, config_schema, presentation, built_in, created_by, created_at, updated_at
 	           FROM board_types WHERE type = $1`
 	def, err := scanBoardType(r.db.QueryRow(ctx, q, typ))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -73,7 +74,7 @@ func (r *postgresRepo) GetBoardType(ctx context.Context, typ string) (*domain.Bo
 }
 
 func (r *postgresRepo) ListBoardTypes(ctx context.Context) ([]*domain.BoardTypeDef, error) {
-	const q = `SELECT id, type, display_name, icon, default_columns, default_config, config_schema, built_in, created_by, created_at, updated_at
+	const q = `SELECT id, type, display_name, icon, default_columns, default_config, config_schema, presentation, built_in, created_by, created_at, updated_at
 	           FROM board_types ORDER BY built_in DESC, type ASC`
 	rows, err := r.db.Query(ctx, q)
 	if err != nil {
@@ -96,12 +97,13 @@ func (r *postgresRepo) UpdateBoardType(ctx context.Context, def *domain.BoardTyp
 	cols, _ := json.Marshal(def.DefaultColumns)
 	cfg, _ := json.Marshal(def.DefaultConfig)
 	schema, _ := json.Marshal(def.ConfigSchema)
+	pres, _ := json.Marshal(def.Presentation)
 	const q = `UPDATE board_types SET
 	             display_name = $2, icon = $3, default_columns = $4,
-	             default_config = $5, config_schema = $6, updated_at = NOW()
+	             default_config = $5, config_schema = $6, presentation = $7, updated_at = NOW()
 	           WHERE type = $1
-	           RETURNING id, type, display_name, icon, default_columns, default_config, config_schema, built_in, created_by, created_at, updated_at`
-	def2, err := scanBoardType(r.db.QueryRow(ctx, q, def.Type, def.DisplayName, def.Icon, cols, cfg, schema))
+	           RETURNING id, type, display_name, icon, default_columns, default_config, config_schema, presentation, built_in, created_by, created_at, updated_at`
+	def2, err := scanBoardType(r.db.QueryRow(ctx, q, def.Type, def.DisplayName, def.Icon, cols, cfg, schema, pres))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
 	}
@@ -157,13 +159,13 @@ func (r *postgresRepo) MarkEventPublished(ctx context.Context, id uuid.UUID) err
 
 func scanBoardType(row pgx.Row) (*domain.BoardTypeDef, error) {
 	def := &domain.BoardTypeDef{}
-	var cols, cfg, schema []byte
+	var cols, cfg, schema, pres []byte
 	err := row.Scan(&def.ID, &def.Type, &def.DisplayName, &def.Icon,
-		&cols, &cfg, &schema, &def.BuiltIn, &def.CreatedBy, &def.CreatedAt, &def.UpdatedAt)
+		&cols, &cfg, &schema, &pres, &def.BuiltIn, &def.CreatedBy, &def.CreatedAt, &def.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	if err := unmarshalDef(def, cols, cfg, schema); err != nil {
+	if err := unmarshalDef(def, cols, cfg, schema, pres); err != nil {
 		return nil, err
 	}
 	return def, nil
@@ -171,19 +173,19 @@ func scanBoardType(row pgx.Row) (*domain.BoardTypeDef, error) {
 
 func scanBoardTypeRow(rows pgx.Rows) (*domain.BoardTypeDef, error) {
 	def := &domain.BoardTypeDef{}
-	var cols, cfg, schema []byte
+	var cols, cfg, schema, pres []byte
 	err := rows.Scan(&def.ID, &def.Type, &def.DisplayName, &def.Icon,
-		&cols, &cfg, &schema, &def.BuiltIn, &def.CreatedBy, &def.CreatedAt, &def.UpdatedAt)
+		&cols, &cfg, &schema, &pres, &def.BuiltIn, &def.CreatedBy, &def.CreatedAt, &def.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	if err := unmarshalDef(def, cols, cfg, schema); err != nil {
+	if err := unmarshalDef(def, cols, cfg, schema, pres); err != nil {
 		return nil, err
 	}
 	return def, nil
 }
 
-func unmarshalDef(def *domain.BoardTypeDef, cols, cfg, schema []byte) error {
+func unmarshalDef(def *domain.BoardTypeDef, cols, cfg, schema, pres []byte) error {
 	if len(cols) > 0 {
 		if err := json.Unmarshal(cols, &def.DefaultColumns); err != nil {
 			return err
@@ -196,6 +198,11 @@ func unmarshalDef(def *domain.BoardTypeDef, cols, cfg, schema []byte) error {
 	}
 	if len(schema) > 0 {
 		if err := json.Unmarshal(schema, &def.ConfigSchema); err != nil {
+			return err
+		}
+	}
+	if len(pres) > 0 {
+		if err := json.Unmarshal(pres, &def.Presentation); err != nil {
 			return err
 		}
 	}

@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { ApiItem, ApiList, Board, BoardType, Column, Member, Project, Role } from './types'
+import type { ApiItem, ApiList, Board, BoardType, BoardTypeDef, Column, Member, Project, Role } from './types'
 
 export const projectsApi = {
   list: () =>
@@ -32,8 +32,11 @@ export const projectsApi = {
   listBoards: (projectId: string) =>
     api.get<ApiList<Board>>(`/projects/${projectId}/boards`),
 
-  createBoard: (projectId: string, name: string, type: BoardType, columns: { name: string; position: number }[]) =>
-    api.post<ApiItem<Board>>(`/projects/${projectId}/boards`, { name, type, columns }),
+  // Columns are intentionally omitted: the Project Service seeds the board-type's
+  // default columns (with their semantic status) from the Board Registry. Pass
+  // config to override the type's default_config (validated against config_schema).
+  createBoard: (projectId: string, name: string, type: BoardType, config?: Record<string, unknown>) =>
+    api.post<ApiItem<Board>>(`/projects/${projectId}/boards`, { name, type, config }),
 }
 
 export const boardsApi = {
@@ -53,5 +56,5 @@ export const boardsApi = {
     api.post<ApiItem<Column>>(`/boards/${boardId}/columns`, { name, position, wip_limit }),
 
   listBoardTypes: () =>
-    api.get<ApiList<{ type: string; label: string }>>('/board-types'),
+    api.get<ApiList<BoardTypeDef>>('/board-types'),
 }

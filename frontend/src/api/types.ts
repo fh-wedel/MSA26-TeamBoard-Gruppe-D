@@ -34,7 +34,84 @@ export interface Member {
   joined_at: string
 }
 
-export type BoardType = 'kanban' | 'scrum' | 'calendar'
+// Board types are runtime data owned by the Board Registry service — the set is
+// open, so this is a free-form slug rather than a fixed union.
+export type BoardType = string
+
+// JSON-Schema fragment as served by the Board Registry (config_schema). Only the
+// subset the frontend renders a form for is typed; unknown keys are tolerated.
+export interface JSONSchema {
+  type?: string
+  properties?: Record<string, JSONSchemaProperty>
+  required?: string[]
+  additionalProperties?: boolean
+}
+
+export interface JSONSchemaProperty {
+  type?: 'string' | 'integer' | 'number' | 'boolean'
+  title?: string
+  description?: string
+  enum?: (string | number)[]
+  default?: unknown
+  minimum?: number
+  maximum?: number
+}
+
+export interface BoardTypeColumnDef {
+  name: string
+  position: number
+  wip_limit?: number
+  status: TaskStatus
+}
+
+// ── Presentation (declarative rendering hints carried by a board type) ──────────
+// `view` selects which built-in frontend renderer to use; `view_config` parametrizes
+// it; `card` controls how a task card looks across views. Validated server-side
+// against a host-defined meta-schema. Unknown/empty `view` falls back to the board.
+export type ViewKind = 'board' | 'calendar' | 'timeline'
+
+export type CardColorBy = 'priority' | 'status' | 'label'
+
+export interface CardSpec {
+  fields?: string[]
+  color_by?: CardColorBy
+}
+
+export interface ViewConfig {
+  // board
+  group_by?: 'column' | 'assignee' | 'priority'
+  show_wip?: boolean
+  swimlane_by?: string | null
+  // calendar
+  date_field?: string
+  week_start?: 'monday' | 'sunday'
+  default_range?: 'month' | 'week'
+  // timeline
+  start_field?: string
+  end_field?: string
+  color_by?: CardColorBy
+}
+
+export interface Presentation {
+  view?: ViewKind
+  view_config?: ViewConfig
+  card?: CardSpec
+}
+
+// A board-type definition as returned by GET /board-types (Board Registry).
+export interface BoardTypeDef {
+  type: string
+  display_name: string
+  icon: string
+  default_columns: BoardTypeColumnDef[]
+  default_config: Record<string, unknown>
+  config_schema: JSONSchema
+  presentation?: Presentation
+  built_in: boolean
+  created_by?: string
+  created_at: string
+  updated_at: string
+}
 
 export interface Column {
   id: string
@@ -42,6 +119,7 @@ export interface Column {
   name: string
   position: number
   wip_limit?: number
+  status?: TaskStatus
 }
 
 export interface Board {
@@ -72,6 +150,7 @@ export interface Task {
   priority: Priority
   assignee_id?: string
   due_date?: string
+  start_date?: string
   labels: string[]
   position: string
   created_by: string
