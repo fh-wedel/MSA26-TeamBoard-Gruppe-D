@@ -1,10 +1,18 @@
-# Keep the build context lean when building from repo root
+# Keep the Docker build context small so CI uploads stay fast.
+# The Go service builds use the repo root as context but only COPY shared/go +
+# their own service dir, so everything below is dead weight in the context.
 .git
 .github
+.idea
+.claude
+node_modules
+infra/
+infrastructure/
+frontend/
+scripts/
 docs/
-infra/cdk/
-frontend/node_modules
-frontend/dist
+*.ipynb
+docker-compose*.yml
 **/tmp/
 **/*.test
 **/testdata/
