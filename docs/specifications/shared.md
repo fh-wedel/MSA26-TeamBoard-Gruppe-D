@@ -43,9 +43,7 @@ shared/go/
 │   └── eventbus_test.go
 │
 ├── outbox/
-│   ├── outbox.go                          # Outbox-Reader-Worker
-│   ├── publisher.go                       # Outbox → eventbus
-│   └── outbox_test.go
+│   └── outbox.go                          # Outbox-Reader-Worker (publiziert via eventbus.Publisher)
 │
 ├── observability/
 │   ├── logger.go                          # slog-Setup

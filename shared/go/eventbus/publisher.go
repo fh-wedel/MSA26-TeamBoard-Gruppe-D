@@ -45,7 +45,11 @@ func (p *publisher) Publish(ctx context.Context, env Envelope) error {
 		traceID = env.TraceID
 	}
 
-	err = p.ch.PublishWithContext(ctx, p.exchange, env.EventType, false, false, amqp.Publishing{
+	// Publish with a deferred confirmation and wait for the broker ack before
+	// returning. Callers (notably outbox.Worker) mark the event published in the
+	// same DB transaction once Publish returns nil, so returning before the ack
+	// would risk losing an event while recording it as published.
+	conf, err := p.ch.PublishWithDeferredConfirmWithContext(ctx, p.exchange, env.EventType, false, false, amqp.Publishing{
 		ContentType:  "application/json",
 		DeliveryMode: amqp.Persistent,
 		Timestamp:    time.Now(),
@@ -55,6 +59,14 @@ func (p *publisher) Publish(ctx context.Context, env Envelope) error {
 	})
 	if err != nil {
 		return fmt.Errorf("publish %q: %w", env.EventType, err)
+	}
+
+	ok, err := conf.WaitContext(ctx)
+	if err != nil {
+		return fmt.Errorf("await confirm %q: %w", env.EventType, err)
+	}
+	if !ok {
+		return fmt.Errorf("publish %q nacked by broker", env.EventType)
 	}
 
 	slog.Debug("event published", "event_type", env.EventType, "event_id", env.EventID)

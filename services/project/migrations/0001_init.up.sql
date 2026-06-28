@@ -60,7 +60,8 @@ CREATE TABLE boards (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ NULL,
 
-    CONSTRAINT boards_type        CHECK (type IN ('kanban', 'scrum', 'calendar')),
+    -- No hardcoded type allowlist: board types are resolved at runtime against
+    -- the Board Registry service; boards.type is a free slug validated there.
     CONSTRAINT boards_name_length CHECK (char_length(name) BETWEEN 1 AND 100)
 );
 
@@ -73,12 +74,32 @@ CREATE TABLE board_columns (
     position   INTEGER NOT NULL,
     wip_limit  INTEGER NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Explicit semantic task status, sourced from the board type definition.
+    -- The task service uses this instead of guessing from the column name.
+    status     TEXT    NOT NULL DEFAULT 'open',
 
     CONSTRAINT board_columns_name_length     CHECK (char_length(name) BETWEEN 1 AND 50),
     CONSTRAINT board_columns_unique_position UNIQUE (board_id, position)
 );
 
 CREATE INDEX idx_board_columns_board ON board_columns (board_id, position);
+
+CREATE TABLE invitations (
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id    UUID         NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    invitee_email TEXT         NOT NULL,
+    role          TEXT         NOT NULL DEFAULT 'viewer',
+    token         TEXT         NOT NULL UNIQUE,
+    invited_by    UUID         NOT NULL,
+    status        TEXT         NOT NULL DEFAULT 'pending',
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    expires_at    TIMESTAMPTZ  NOT NULL DEFAULT (now() + interval '7 days'),
+    responded_at  TIMESTAMPTZ
+);
+
+CREATE INDEX ON invitations(token);
+CREATE INDEX ON invitations(project_id);
+CREATE INDEX ON invitations(invitee_email, status);
 
 CREATE TABLE outbox (
     id           UUID PRIMARY KEY,

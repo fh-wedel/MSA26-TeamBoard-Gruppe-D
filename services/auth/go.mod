@@ -12,6 +12,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/redis/go-redis/v9 v9.5.3
+	github.com/teamboard/shared/go v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.24.0
 )
 

@@ -3,102 +3,59 @@ package events
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/google/uuid"
 	"github.com/teamboard/services/plugin/internal/domain"
+	"github.com/teamboard/shared/go/eventbus"
 )
 
-type Consumer struct {
-	conn       *amqp.Connection
-	exchange   string
-	queue      string
-	bindingKeys []string
-	dispatcher domain.DispatcherService
+// EventHandler adapts shared eventbus envelopes to the plugin domain handlers.
+// It is wired as the root eventbus.Handler (wrapped with IdempotentHandler).
+type EventHandler struct {
+	dispatcher     domain.DispatcherService
 	projectHandler *ProjectHandler
 	userHandler    *UserHandler
-	logger     *slog.Logger
 }
 
-func NewConsumer(
-	conn *amqp.Connection,
-	exchange, queue string,
-	bindingKeys []string,
-	dispatcher domain.DispatcherService,
-	projectHandler *ProjectHandler,
-	userHandler *UserHandler,
-	logger *slog.Logger,
-) *Consumer {
-	return &Consumer{
-		conn:           conn,
-		exchange:       exchange,
-		queue:          queue,
-		bindingKeys:    bindingKeys,
-		dispatcher:     dispatcher,
-		projectHandler: projectHandler,
-		userHandler:    userHandler,
-		logger:         logger,
-	}
+// NewEventHandler creates the root handler for the plugin event consumer.
+func NewEventHandler(dispatcher domain.DispatcherService, projectHandler *ProjectHandler, userHandler *UserHandler) *EventHandler {
+	return &EventHandler{dispatcher: dispatcher, projectHandler: projectHandler, userHandler: userHandler}
 }
 
-func (c *Consumer) Run(ctx context.Context) error {
-	ch, err := c.conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	if err := ch.ExchangeDeclare(c.exchange, "topic", true, false, false, false, nil); err != nil {
-		return err
-	}
-	q, err := ch.QueueDeclare(c.queue, true, false, false, false, nil)
-	if err != nil {
-		return err
-	}
-	for _, key := range c.bindingKeys {
-		if err := ch.QueueBind(q.Name, key, c.exchange, false, nil); err != nil {
-			return err
-		}
-	}
-
-	msgs, err := ch.Consume(q.Name, "", false, false, false, false, nil)
-	if err != nil {
-		return err
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case msg, ok := <-msgs:
-			if !ok {
-				return nil
-			}
-			if err := c.handle(ctx, msg); err != nil {
-				c.logger.Error("event handling failed", "err", err, "routing_key", msg.RoutingKey)
-				_ = msg.Nack(false, true) // requeue
-			} else {
-				_ = msg.Ack(false)
-			}
-		}
-	}
-}
-
-func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) error {
-	var env Envelope
-	if err := json.Unmarshal(msg.Body, &env); err != nil {
-		c.logger.Warn("failed to parse envelope", "err", err)
-		return nil // don't requeue malformed messages
-	}
-
-	switch {
-	case env.EventType == "project.created":
-		return c.projectHandler.OnProjectCreated(ctx, env)
-	case env.EventType == "project.deleted":
-		return c.projectHandler.OnProjectDeleted(ctx, env)
-	case env.EventType == "user.deleted":
-		return c.userHandler.OnUserDeleted(ctx, env)
+// Handle maps the shared envelope onto the plugin domain envelope and routes
+// it. Project/user lifecycle events update local state; everything else is
+// enqueued for webhook delivery.
+func (h *EventHandler) Handle(ctx context.Context, env eventbus.Envelope) error {
+	denv := toDomainEnvelope(env)
+	switch denv.EventType {
+	case "project.created":
+		return h.projectHandler.OnProjectCreated(ctx, denv)
+	case "project.deleted":
+		return h.projectHandler.OnProjectDeleted(ctx, denv)
+	case "user.deleted":
+		return h.userHandler.OnUserDeleted(ctx, denv)
 	default:
-		return c.dispatcher.EnqueueForEvent(ctx, env)
+		return h.dispatcher.EnqueueForEvent(ctx, denv)
+	}
+}
+
+// toDomainEnvelope converts the shared wire envelope into the plugin's domain
+// envelope, decoding the raw payload into a generic map.
+func toDomainEnvelope(env eventbus.Envelope) Envelope {
+	var payload map[string]any
+	if len(env.Payload) > 0 {
+		_ = json.Unmarshal(env.Payload, &payload)
+	}
+	aggID, _ := uuid.Parse(env.AggregateID)
+	return Envelope{
+		EventID:       env.EventID,
+		EventType:     env.EventType,
+		OccurredAt:    env.OccurredAt,
+		TraceID:       env.TraceID,
+		Producer:      env.Producer,
+		AggregateType: env.AggregateType,
+		AggregateID:   aggID,
+		Actor:         domain.Actor{UserID: env.Actor.UserID, Type: env.Actor.Type},
+		Payload:       payload,
 	}
 }

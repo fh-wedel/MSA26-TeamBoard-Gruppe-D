@@ -24,6 +24,8 @@ import (
 	"github.com/teamboard/services/notification/internal/push"
 	"github.com/teamboard/services/notification/internal/repository"
 	"github.com/teamboard/services/notification/internal/ws"
+	"github.com/teamboard/shared/go/eventbus"
+	"github.com/teamboard/shared/go/outbox"
 )
 
 func main() {
@@ -88,12 +90,44 @@ func main() {
 	notifSvc := domain.NewNotificationService(repo)
 	dispatcher := events.NewDispatcher(repo, pushSvc)
 
-	publisher := events.NewPublisher(repo, amqpConn, cfg.Exchange)
-	consumer := events.NewConsumer(repo, dispatcher, amqpConn, cfg.QueueName, cfg.Exchange)
+	pub, err := eventbus.NewPublisher(amqpConn, cfg.Exchange)
+	if err != nil {
+		slog.Error("event publisher init failed", "error", err)
+		os.Exit(1)
+	}
+	defer pub.Close()
+	worker := outbox.NewWorker(outbox.Config{
+		Pool:         pool,
+		Publisher:    pub,
+		Producer:     "notification-service",
+		PollInterval: 200 * time.Millisecond,
+	})
+
+	cons, err := eventbus.NewConsumer(amqpConn, eventbus.TopologyOptions{
+		Exchange:    cfg.Exchange,
+		Queue:       cfg.QueueName,
+		BindingKeys: events.BindingKeys(),
+	})
+	if err != nil {
+		slog.Error("event consumer init failed", "error", err)
+		os.Exit(1)
+	}
+	defer cons.Close()
+	handler := events.NewEventHandler(dispatcher)
+	idemStore := eventbus.IdempotencyFuncs{Has: repo.WasEventProcessed, Mark: repo.MarkEventProcessed}
+
 	cleanupWorker := cleanup.NewWorker(repo, cfg.NotificationRetentionDays)
 
-	go publisher.Run(ctx)
-	go consumer.Run(ctx)
+	go func() {
+		if err := worker.Run(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("outbox worker stopped", "error", err)
+		}
+	}()
+	go func() {
+		if err := cons.Subscribe(ctx, eventbus.IdempotentHandler(handler.Handle, idemStore)); err != nil && ctx.Err() == nil {
+			slog.Error("event consumer stopped", "error", err)
+		}
+	}()
 	go cleanupWorker.Run(ctx)
 	go backplane.RunSubscriber(ctx)
 

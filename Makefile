@@ -1,5 +1,5 @@
 .PHONY: help up up-build down restart logs ps clean clean-volumes \
-        seed migrate generate test test-unit test-integration test-shared \
+        seed demo-board-types migrate generate test test-unit test-integration test-shared \
         lint lint-fix build build-services build-frontend \
         shell-postgres shell-redis shell-rabbit urls wait-healthy
 
@@ -25,6 +25,7 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make seed              Insert seed data"
+	@echo "  make demo-board-types  Register scrum + gantt at runtime via the API (notebook demo)"
 	@echo "  make generate          Run sqlc + oapi-codegen for all services"
 	@echo "  make test              Run all tests"
 	@echo "  make test-unit         Run unit tests only (-short)"
@@ -96,6 +97,15 @@ migrate:
 seed:
 	@echo "Seeding test data..."
 	@python3 scripts/seed.py 2>/dev/null || python scripts/seed.py
+
+# Demonstrates runtime board-type registration (scrum + gantt) against the running
+# stack via the public Board Registry API. The built-in kanban/calendar types come
+# from the migration; this notebook adds the rest at runtime. Requires Jupyter.
+demo-board-types:
+	@echo "Registering scrum + gantt via the Board Registry API (notebook demo)..."
+	@command -v jupyter >/dev/null 2>&1 || { echo "jupyter not found — install with 'pip install jupyter', or open docs/demo/board-types.ipynb manually"; exit 1; }
+	@jupyter execute docs/demo/board-types.ipynb
+	@echo "Done. See docs/demo/board-types.ipynb for the full walkthrough."
 
 generate:
 	@for svc in $(SERVICES); do \

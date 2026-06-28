@@ -1500,13 +1500,9 @@ services/task/
 │   │   ├── client.go
 │   │   └── http_client.go
 │   ├── events/
-│   │   ├── publisher.go                 # Outbox -> RabbitMQ
-│   │   ├── consumer.go                  # Routing zu Handlern
-│   │   ├── handler_users.go             # user.* Events
-│   │   ├── handler_boards.go            # board.* / column.*
-│   │   ├── handler_projects.go          # project.deleted
-│   │   ├── handler_documents.go         # document.deleted
-│   │   └── envelope.go
+│   │   └── consumer.go                  # shared-Envelope-Handler: Routing zu Handlern
+│   │                                    #   (user.* / board.* / column.* / project.deleted / document.deleted)
+│   │                                    #   (Publishing: shared outbox.Worker, verdrahtet in main.go)
 │   └── config/
 │       └── config.go
 ├── migrations/

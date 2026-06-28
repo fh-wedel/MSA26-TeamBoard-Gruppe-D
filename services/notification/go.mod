@@ -1,8 +1,6 @@
 module github.com/teamboard/services/notification
 
-go 1.23
-
-toolchain go1.23.1
+go 1.25
 
 require (
 	github.com/caarlos0/env/v10 v10.0.0
@@ -14,6 +12,7 @@ require (
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/sony/gobreaker v0.5.0
 	github.com/stretchr/testify v1.9.0
+	github.com/teamboard/shared/go v0.0.0-00010101000000-000000000000
 )
 
 require (

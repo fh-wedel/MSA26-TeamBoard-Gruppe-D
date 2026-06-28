@@ -18,12 +18,12 @@ import (
 	"github.com/teamboard/services/auth/internal/api"
 	"github.com/teamboard/services/auth/internal/config"
 	"github.com/teamboard/services/auth/internal/domain"
-	"github.com/teamboard/services/auth/internal/events"
 	"github.com/teamboard/services/auth/internal/keys"
 	"github.com/teamboard/services/auth/internal/mail"
 	"github.com/teamboard/services/auth/internal/ratelimit"
 	"github.com/teamboard/services/auth/internal/repository"
-	"github.com/teamboard/services/auth/internal/repository/db"
+	"github.com/teamboard/shared/go/eventbus"
+	"github.com/teamboard/shared/go/outbox"
 )
 
 func main() {
@@ -83,7 +83,6 @@ func run() error {
 
 	// Infrastructure
 	repo := repository.New(pool)
-	queries := db.NewFromPool(pool)
 	limiter := ratelimit.NewRedisLimiter(redisClient)
 
 	encKey, err := base64.StdEncoding.DecodeString(cfg.KeyEncryptionKey)
@@ -120,13 +119,24 @@ func run() error {
 		PasswordMaxLen:   cfg.PasswordMaxLen,
 	})
 
-	// Outbox publisher goroutine
-	pub := events.NewPublisher(queries, amqpConn, cfg.RabbitMQExchange, cfg.OutboxPollInterval, cfg.OutboxBatchSize)
+	// Outbox publisher goroutine (shared eventbus + outbox worker)
+	pub, err := eventbus.NewPublisher(amqpConn, cfg.RabbitMQExchange)
+	if err != nil {
+		return fmt.Errorf("event publisher: %w", err)
+	}
+	defer pub.Close()
+	worker := outbox.NewWorker(outbox.Config{
+		Pool:         pool,
+		Publisher:    pub,
+		Producer:     "auth-service",
+		PollInterval: cfg.OutboxPollInterval,
+		BatchSize:    cfg.OutboxBatchSize,
+	})
 	pubCtx, cancelPub := context.WithCancel(ctx)
 	defer cancelPub()
 	go func() {
-		if err := pub.Run(pubCtx); err != nil && pubCtx.Err() == nil {
-			slog.Error("outbox publisher stopped unexpectedly", "error", err)
+		if err := worker.Run(pubCtx); err != nil && pubCtx.Err() == nil {
+			slog.Error("outbox worker stopped unexpectedly", "error", err)
 		}
 	}()
 

@@ -10,8 +10,8 @@
 ## 1. Verantwortung und Abgrenzung
 
 ### 1.1 Verantwortet
-- **Autoritative Quelle für Board-Typ-*Definitionen*** (kanban, scrum, calendar + benutzerdefinierte
-  Typen).
+- **Autoritative Quelle für Board-Typ-*Definitionen*** — eingebaut (`kanban`, `calendar`) plus
+  zur Laufzeit registrierte Typen (z. B. `scrum`, `gantt`; siehe `docs/demo/board-types.ipynb`).
 - **Laufzeit-Registrierung** neuer Board-Typen durch Entwickler (REST-API) — ohne Redeploy des
   Project-Service.
 - Bereitstellung von Default-Columns (inkl. Status), Default-Config und JSON-Schema je Typ.
@@ -46,9 +46,11 @@ Tabelle `board_types`:
 | `created_by` | UUID NULL | Registrierender User |
 | `created_at`, `updated_at` | TIMESTAMPTZ | |
 
-Plus `outbox` (Outbox-Pattern). Built-in-Typen (kanban/scrum/calendar/gantt) werden per
-Seed-Migrationen angelegt (`0002_seed_builtin_types`, `0004_seed_presentation`,
-`0005_calendar_default_column`).
+Plus `outbox` (Outbox-Pattern). Die eingebauten Typen `kanban` und `calendar` werden inkl.
+Schema und Presentation-Spec in der Baseline-Migration `0001_init` angelegt (der aktuelle
+Stand ist die erste Version; es gibt keine inkrementelle Migrationshistorie). Weitere Typen
+wie `scrum` und `gantt` werden **nicht** geseedet, sondern zur Laufzeit über die API
+registriert — siehe das Demo-Notebook `docs/demo/board-types.ipynb` (`make demo-board-types`).
 
 `status` ∈ {`open`, `in_progress`, `blocked`, `done`, `archived`} (muss zum Task-Service-Statusset
 passen).

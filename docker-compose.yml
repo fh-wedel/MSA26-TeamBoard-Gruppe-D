@@ -389,6 +389,9 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       RABBITMQ_EXCHANGE: teamboard.events
       RABBITMQ_CONSUMER_QUEUE: plugin-service-queue
+      # Subscribe to all domain events; the webhook dispatcher filters per
+      # registered webhook event_filter (see ARCHITECTURE §7.2).
+      RABBITMQ_BINDING_KEYS: "#"
       JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
       JWT_ISSUER: https://auth.teamboard.local
       JWT_AUDIENCE: teamboard-api

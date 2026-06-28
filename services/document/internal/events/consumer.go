@@ -3,105 +3,44 @@ package events
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/teamboard/services/document/internal/domain"
+	"github.com/teamboard/shared/go/eventbus"
 )
 
-// Consumer handles inbound RabbitMQ events relevant to the Document Service.
-// Routing keys consumed: project.created, project.deleted,
-//                        project.member.joined, project.member.left,
-//                        user.created, user.deleted
-type Consumer struct {
-	repo     domain.Repository
-	conn     *amqp.Connection
-	q        string // AMQP queue name
-	exchange string
+// BindingKeys lists the routing keys the document service subscribes to. It
+// binds to all events ("#") and ignores those it has no handler for.
+func BindingKeys() []string {
+	return []string{"#"}
 }
 
-func NewConsumer(repo domain.Repository, conn *amqp.Connection, queueName, exchange string) *Consumer {
-	return &Consumer{repo: repo, conn: conn, q: queueName, exchange: exchange}
+// EventHandler handles inbound domain events relevant to the Document Service.
+// Routing keys handled: project.created, project.deleted, user.created,
+// user.deleted. It is wired as the root eventbus.Handler.
+type EventHandler struct {
+	repo domain.Repository
 }
 
-func (c *Consumer) Run(ctx context.Context) {
-	ch, err := c.conn.Channel()
-	if err != nil {
-		slog.ErrorContext(ctx, "consumer channel open failed", "error", err)
-		return
-	}
-	defer ch.Close()
-
-	if _, err := ch.QueueDeclare(c.q, true, false, false, false, nil); err != nil {
-		slog.ErrorContext(ctx, "consumer queue declare failed", "error", err)
-		return
-	}
-	if err := ch.QueueBind(c.q, "#", c.exchange, false, nil); err != nil {
-		slog.ErrorContext(ctx, "consumer queue bind failed", "error", err)
-		return
-	}
-
-	msgs, err := ch.Consume(c.q, "", false, false, false, false, nil)
-	if err != nil {
-		slog.ErrorContext(ctx, "consumer consume failed", "error", err)
-		return
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg, ok := <-msgs:
-			if !ok {
-				return
-			}
-			c.handle(ctx, msg)
-		}
-	}
+func NewEventHandler(repo domain.Repository) *EventHandler {
+	return &EventHandler{repo: repo}
 }
 
-func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) {
-	eventID := msg.MessageId
-	if eventID == "" {
-		_ = msg.Nack(false, false)
-		return
-	}
-
-	already, err := c.repo.WasEventProcessed(ctx, eventID)
-	if err != nil || already {
-		_ = msg.Ack(false)
-		return
-	}
-
-	var dispatchErr error
-	switch msg.RoutingKey {
+// Handle routes an event by type; unhandled types are ignored.
+func (h *EventHandler) Handle(ctx context.Context, env eventbus.Envelope) error {
+	switch env.EventType {
 	case "project.created":
-		dispatchErr = c.onProjectCreated(ctx, msg.Body)
+		return h.onProjectCreated(ctx, env.Payload)
 	case "project.deleted":
-		dispatchErr = c.onProjectDeleted(ctx, msg.Body)
-	case "project.member.joined", "project.member.left":
-		// no action needed — permission cache TTL handles this
-		dispatchErr = nil
+		return h.onProjectDeleted(ctx, env.Payload)
 	case "user.created":
-		dispatchErr = c.onUserCreated(ctx, msg.Body)
+		return h.onUserCreated(ctx, env.Payload)
 	case "user.deleted":
-		dispatchErr = c.onUserDeleted(ctx, msg.Body)
-	default:
-		_ = msg.Ack(false)
-		return
+		return h.onUserDeleted(ctx, env.Payload)
 	}
-
-	if dispatchErr != nil {
-		slog.ErrorContext(ctx, "event handling failed", "routing_key", msg.RoutingKey, "event_id", eventID, "error", dispatchErr)
-		_ = msg.Nack(false, true)
-		return
-	}
-
-	_ = c.repo.MarkEventProcessed(ctx, eventID)
-	_ = msg.Ack(false)
+	return nil
 }
 
-func (c *Consumer) onProjectCreated(ctx context.Context, body []byte) error {
+func (h *EventHandler) onProjectCreated(ctx context.Context, body []byte) error {
 	var payload struct {
 		ProjectID string `json:"project_id"`
 	}
@@ -112,10 +51,10 @@ func (c *Consumer) onProjectCreated(ctx context.Context, body []byte) error {
 	if err != nil {
 		return err
 	}
-	return c.repo.UpsertKnownProject(ctx, id)
+	return h.repo.UpsertKnownProject(ctx, id)
 }
 
-func (c *Consumer) onProjectDeleted(ctx context.Context, body []byte) error {
+func (h *EventHandler) onProjectDeleted(ctx context.Context, body []byte) error {
 	var payload struct {
 		ProjectID string `json:"project_id"`
 	}
@@ -126,14 +65,14 @@ func (c *Consumer) onProjectDeleted(ctx context.Context, body []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.repo.SoftDeleteDocumentsByProject(ctx, id)
+	_, err = h.repo.SoftDeleteDocumentsByProject(ctx, id)
 	if err != nil {
 		return err
 	}
-	return c.repo.MarkKnownProjectDeleted(ctx, id)
+	return h.repo.MarkKnownProjectDeleted(ctx, id)
 }
 
-func (c *Consumer) onUserCreated(ctx context.Context, body []byte) error {
+func (h *EventHandler) onUserCreated(ctx context.Context, body []byte) error {
 	var payload struct {
 		UserID string `json:"user_id"`
 	}
@@ -144,10 +83,10 @@ func (c *Consumer) onUserCreated(ctx context.Context, body []byte) error {
 	if err != nil {
 		return err
 	}
-	return c.repo.UpsertKnownUser(ctx, id)
+	return h.repo.UpsertKnownUser(ctx, id)
 }
 
-func (c *Consumer) onUserDeleted(ctx context.Context, body []byte) error {
+func (h *EventHandler) onUserDeleted(ctx context.Context, body []byte) error {
 	var payload struct {
 		UserID string `json:"user_id"`
 	}
@@ -158,5 +97,5 @@ func (c *Consumer) onUserDeleted(ctx context.Context, body []byte) error {
 	if err != nil {
 		return err
 	}
-	return c.repo.MarkKnownUserDeleted(ctx, id)
+	return h.repo.MarkKnownUserDeleted(ctx, id)
 }

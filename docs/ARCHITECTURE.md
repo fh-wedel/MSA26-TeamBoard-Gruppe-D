@@ -106,7 +106,7 @@ Bindende Designentscheidungen für alle Services. Abweichungen erfordern ein dok
 
 ## 3. Service-Katalog
 
-Sieben Services bilden das System. Jeder Service hat einen klar abgegrenzten Verantwortungsbereich.
+Das System besteht aus sieben Domain-Services (Auth, Project, Task, Document, Notification, Plugin/Webhook, Board Registry) plus dem API-Gateway. Jeder Service hat einen klar abgegrenzten Verantwortungsbereich; die Board Registry (§3.8) ist nach den ursprünglichen sechs Services hinzugekommen.
 
 ### 3.1 Auth Service
 
@@ -335,20 +335,15 @@ teamboard/
 │       └── deploy-prod.yml
 ├── docs/
 │   ├── ARCHITECTURE.md               # ← dieses Dokument
-│   ├── adr/                          # Architecture Decision Records
-│   │   ├── 0001-microservices.md
-│   │   ├── 0002-go-as-main-language.md
-│   │   ├── 0003-rabbitmq-vs-kafka.md
-│   │   └── ...
-│   ├── api/                          # OpenAPI- und AsyncAPI-Specs
-│   │   ├── auth.openapi.yaml
-│   │   ├── project.openapi.yaml
-│   │   ├── task.openapi.yaml
-│   │   ├── document.openapi.yaml
-│   │   ├── notification.openapi.yaml
-│   │   ├── plugin.openapi.yaml
-│   │   └── events.asyncapi.yaml
-│   └── runbooks/                     # operative Anleitungen
+│   ├── decisions/                    # Architecture Decision Records (ADRs)
+│   │   ├── 0001-board-type-extensibility.md
+│   │   └── 0002-board-view-extensibility.md
+│   ├── services/                     # Detail pro Service: DB-Schema, OpenAPI, Use-Cases
+│   │   ├── auth.md
+│   │   ├── project.md
+│   │   └── ...                       # OpenAPI-Specs sind hier eingebettet (kein eigenes docs/api/)
+│   ├── specifications/               # coding-guidelines, shared, orchestration, gateway
+│   └── demo/                         # Notebooks (Board-Typen, Webhooks)
 ├── services/
 │   ├── auth/
 │   │   ├── cmd/server/main.go
@@ -364,18 +359,20 @@ teamboard/
 │   │   ├── Dockerfile
 │   │   ├── go.mod
 │   │   └── README.md
-│   ├── project/    (gleiche Struktur)
-│   ├── task/       (gleiche Struktur)
-│   ├── document/   (gleiche Struktur)
+│   ├── project/      (gleiche Struktur)
+│   ├── task/         (gleiche Struktur)
+│   ├── document/     (gleiche Struktur)
 │   ├── notification/ (gleiche Struktur)
-│   └── plugin/     (gleiche Struktur)
+│   ├── plugin/       (gleiche Struktur)
+│   └── boardregistry/ (gleiche Struktur)
 ├── shared/
 │   └── go/
 │       ├── authmiddleware/           # JWT-Validierung als Library
-│       ├── eventbus/                 # RabbitMQ-Client-Wrapper
+│       ├── eventbus/                 # RabbitMQ-Wrapper (Envelope, Publisher, Consumer)
+│       ├── outbox/                   # Outbox-Worker (poll → publish)
+│       ├── servicetoken/             # Service-to-Service-JWT (aud: "internal")
 │       ├── observability/            # OTel-Setup, Logger
-│       ├── httputil/                 # Common HTTP-Helpers, Error-Mapping
-│       └── outbox/                   # Outbox-Pattern-Library
+│       └── httputil/                 # Common HTTP-Helpers, Error-Mapping
 ├── frontend/
 │   ├── src/
 │   ├── package.json
@@ -440,8 +437,7 @@ services/<name>/
 │   │   ├── db/               # sqlc-generierter Code
 │   │   └── repository.go     # Interface + Implementierung
 │   ├── events/
-│   │   ├── publisher.go      # Outgoing Events
-│   │   └── consumer.go       # Incoming Events (falls relevant)
+│   │   └── consumer.go       # Incoming Events (falls relevant); Publishing via shared outbox.Worker in main.go
 │   └── config/
 │       └── config.go         # Env-basierte Config
 ```
@@ -652,9 +648,21 @@ Die Spec ist Source of Truth — handgeschriebener Code implementiert die generi
 }
 ```
 
-- `event_id`: ULID, idempotenz-tauglich
+- `event_id`: UUID (Outbox-Zeilen-ID), idempotenz-tauglich
 - `event_version`: erlaubt Schema-Evolution
 - `payload`: event-spezifisch (siehe unten)
+
+**Transport (verbindlich):** Dieser Envelope ist der **vollständige AMQP-Message-Body**
+(JSON). Implementiert über die Shared-Libs `shared/go/eventbus` (Publisher/Consumer)
+und `shared/go/outbox` (Worker) — jeder Service nutzt sie, kein service-eigener
+Publisher/Consumer mehr.
+
+- **`MessageId`** der AMQP-Nachricht trägt zusätzlich die `event_id` (Idempotenz-Key
+  der Consumer, `processed_events`).
+- **Routing-Key** = `event_type`.
+- **`traceparent`-Header** trägt die `trace_id` (Trace-Propagation über die async-Grenze).
+- Der Publisher wartet auf den **Publisher-Confirm** des Brokers, bevor die
+  Outbox-Zeile als `published_at` markiert wird (kein Event-Verlust bei Broker-Nack).
 
 ### 7.4 Event-Katalog (Auszug)
 
@@ -681,7 +689,7 @@ Vollständiger Katalog in `docs/api/events.asyncapi.yaml`.
 
 ### 7.5 Outbox-Pattern (verbindlich)
 
-Jeder Service, der Domain-Events produziert, schreibt sie in eine `outbox`-Tabelle in derselben DB-Transaktion wie die Datenänderung. Ein separater Publisher-Worker liest die Outbox und sendet an RabbitMQ. Bei erfolgreicher Zustellung wird die Outbox-Zeile als `published_at` markiert.
+Jeder Service, der Domain-Events produziert, schreibt sie in eine `outbox`-Tabelle in derselben DB-Transaktion wie die Datenänderung. Der gemeinsame `shared/go/outbox`-`Worker` pollt die Outbox (`FOR UPDATE SKIP LOCKED`), verpackt jede Zeile in den Envelope (§7.3) und publiziert via `shared/go/eventbus`-Publisher an RabbitMQ. Die Outbox-Zeile wird erst nach bestätigtem Publisher-Confirm in derselben Transaktion als `published_at` markiert — schlägt der Publish fehl, wird die Transaktion zurückgerollt und beim nächsten Poll erneut versucht.
 
 ```sql
 CREATE TABLE outbox (

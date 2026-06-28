@@ -14,7 +14,11 @@ CREATE TABLE known_columns (
     id       UUID    PRIMARY KEY,
     board_id UUID    NOT NULL REFERENCES known_boards(id) ON DELETE CASCADE,
     name     TEXT    NOT NULL,
-    position INTEGER NOT NULL
+    position INTEGER NOT NULL,
+    -- Explicit semantic status, propagated from the board type via
+    -- board.created / column.* events. Task status is derived from this instead
+    -- of guessing from the column name (DeriveStatus remains a fallback).
+    status   TEXT    NOT NULL DEFAULT 'open'
 );
 
 CREATE INDEX idx_known_columns_board ON known_columns (board_id, position);
@@ -44,6 +48,9 @@ CREATE TABLE tasks (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at  TIMESTAMPTZ NULL,
+    -- Optional start date, enabling a real start..end span in the timeline (Gantt)
+    -- view. Tasks without it fall back to created_at when charted.
+    start_date  TIMESTAMPTZ NULL,
 
     CONSTRAINT tasks_title_length       CHECK (char_length(title) BETWEEN 1 AND 500),
     CONSTRAINT tasks_description_length CHECK (char_length(description) <= 10000),

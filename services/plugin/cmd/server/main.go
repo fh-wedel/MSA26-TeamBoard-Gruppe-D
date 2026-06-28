@@ -20,6 +20,8 @@ import (
 	"github.com/teamboard/services/plugin/internal/events"
 	"github.com/teamboard/services/plugin/internal/projectclient"
 	"github.com/teamboard/services/plugin/internal/repository"
+	"github.com/teamboard/shared/go/eventbus"
+	"github.com/teamboard/shared/go/outbox"
 )
 
 func main() {
@@ -71,20 +73,35 @@ func main() {
 	breakerReg := delivery.NewBreakerRegistry(cfg.Breaker.ConsecutiveFailures, cfg.Breaker.Timeout)
 	worker := delivery.NewWorker(repo, httpClient, breakerReg, cfg.Delivery.UserAgent, logger)
 
-	// Event handlers
+	// Event handlers (shared eventbus + outbox worker)
 	projHandler := events.NewProjectHandler(repo, logger)
 	userHandler := events.NewUserHandler(logger)
-	consumer := events.NewConsumer(
-		amqpConn,
-		cfg.RabbitMQ.Exchange,
-		cfg.RabbitMQ.ConsumerQueue,
-		cfg.RabbitMQ.BindingKeys,
-		dispatcherSvc,
-		projHandler,
-		userHandler,
-		logger,
-	)
-	publisher := events.NewPublisher(amqpConn, cfg.RabbitMQ.Exchange, repo, logger)
+	handler := events.NewEventHandler(dispatcherSvc, projHandler, userHandler)
+
+	pub, err := eventbus.NewPublisher(amqpConn, cfg.RabbitMQ.Exchange)
+	if err != nil {
+		logger.Error("event publisher init failed", "err", err)
+		os.Exit(1)
+	}
+	defer pub.Close()
+	outboxWorker := outbox.NewWorker(outbox.Config{
+		Pool:         pool,
+		Publisher:    pub,
+		Producer:     "plugin-service",
+		PollInterval: 200 * time.Millisecond,
+	})
+
+	cons, err := eventbus.NewConsumer(amqpConn, eventbus.TopologyOptions{
+		Exchange:    cfg.RabbitMQ.Exchange,
+		Queue:       cfg.RabbitMQ.ConsumerQueue,
+		BindingKeys: cfg.RabbitMQ.BindingKeys,
+	})
+	if err != nil {
+		logger.Error("event consumer init failed", "err", err)
+		os.Exit(1)
+	}
+	defer cons.Close()
+	idemStore := eventbus.IdempotencyFuncs{Has: repo.WasEventProcessed, Mark: repo.MarkEventProcessed}
 
 	// HTTP server
 	router := api.NewRouter(webhookSvc, pool)
@@ -98,13 +115,13 @@ func main() {
 
 	// Start background goroutines
 	go func() {
-		if err := consumer.Run(ctx); err != nil && ctx.Err() == nil {
+		if err := cons.Subscribe(ctx, eventbus.IdempotentHandler(handler.Handle, idemStore)); err != nil && ctx.Err() == nil {
 			logger.Error("consumer stopped", "err", err)
 		}
 	}()
 	go func() {
-		if err := publisher.Run(ctx); err != nil && ctx.Err() == nil {
-			logger.Error("publisher stopped", "err", err)
+		if err := outboxWorker.Run(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("outbox worker stopped", "err", err)
 		}
 	}()
 	for i := 0; i < cfg.Delivery.WorkerCount; i++ {

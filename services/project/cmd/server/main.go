@@ -21,6 +21,8 @@ import (
 	"github.com/teamboard/services/project/internal/domain"
 	"github.com/teamboard/services/project/internal/events"
 	"github.com/teamboard/services/project/internal/repository"
+	"github.com/teamboard/shared/go/eventbus"
+	"github.com/teamboard/shared/go/outbox"
 )
 
 func main() {
@@ -76,13 +78,43 @@ func main() {
 	boardTypes := boardtypeclient.New(cfg.BoardRegistryURL, cfg.ServiceTokenSecret, cfg.BoardRegistryTimeout, cfg.BoardTypeCacheTTL)
 	svc := domain.NewProjectService(repo, permCache, boardTypes)
 
-	// Outbox publisher
-	publisher := events.NewPublisher(repo, rabbitConn, cfg.RabbitExchange)
-	go publisher.Run(ctx)
+	// Outbox publisher (shared eventbus + outbox worker)
+	pub, err := eventbus.NewPublisher(rabbitConn, cfg.RabbitExchange)
+	if err != nil {
+		slog.Error("event publisher init failed", "error", err)
+		os.Exit(1)
+	}
+	defer pub.Close()
+	worker := outbox.NewWorker(outbox.Config{
+		Pool:         pool,
+		Publisher:    pub,
+		Producer:     "project-service",
+		PollInterval: 200 * time.Millisecond,
+	})
+	go func() {
+		if err := worker.Run(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("outbox worker stopped", "error", err)
+		}
+	}()
 
 	// Event consumer (also invalidates the board-type cache on boardtype.* events)
-	consumer := events.NewConsumer(repo, rabbitConn, cfg.RabbitExchange, cfg.RabbitQueue, boardTypes)
-	go consumer.Run(ctx)
+	cons, err := eventbus.NewConsumer(rabbitConn, eventbus.TopologyOptions{
+		Exchange:    cfg.RabbitExchange,
+		Queue:       cfg.RabbitQueue,
+		BindingKeys: events.BindingKeys(),
+	})
+	if err != nil {
+		slog.Error("event consumer init failed", "error", err)
+		os.Exit(1)
+	}
+	defer cons.Close()
+	handler := events.NewEventHandler(repo, boardTypes)
+	store := eventbus.IdempotencyFuncs{Has: repo.WasEventProcessed, Mark: repo.MarkEventProcessed}
+	go func() {
+		if err := cons.Subscribe(ctx, eventbus.IdempotentHandler(handler.Handle, store)); err != nil && ctx.Err() == nil {
+			slog.Error("event consumer stopped", "error", err)
+		}
+	}()
 
 	// HTTP server
 	router := api.NewRouter(svc, cfg.ServiceTokenSecret)

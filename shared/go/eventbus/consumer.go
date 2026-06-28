@@ -84,6 +84,22 @@ type IdempotencyStore interface {
 	MarkProcessed(ctx context.Context, eventID string) error
 }
 
+// IdempotencyFuncs adapts a pair of functions to the IdempotencyStore interface.
+// Useful for wiring repositories that expose differently named methods
+// (e.g. WasEventProcessed / MarkEventProcessed).
+type IdempotencyFuncs struct {
+	Has  func(ctx context.Context, eventID string) (bool, error)
+	Mark func(ctx context.Context, eventID string) error
+}
+
+func (f IdempotencyFuncs) HasProcessed(ctx context.Context, eventID string) (bool, error) {
+	return f.Has(ctx, eventID)
+}
+
+func (f IdempotencyFuncs) MarkProcessed(ctx context.Context, eventID string) error {
+	return f.Mark(ctx, eventID)
+}
+
 // IdempotentHandler wraps a Handler with processed_events deduplication.
 func IdempotentHandler(inner Handler, store IdempotencyStore) Handler {
 	return func(ctx context.Context, env Envelope) error {

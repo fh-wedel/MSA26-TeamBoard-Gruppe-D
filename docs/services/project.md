@@ -1340,9 +1340,8 @@ services/project/
 │   │   ├── redis.go                     # Redis-Implementation
 │   │   └── noop.go                      # Fallback bei deaktiviertem Cache
 │   ├── events/
-│   │   ├── publisher.go                 # Outbox -> RabbitMQ
-│   │   ├── consumer.go                  # user.* events
-│   │   └── envelope.go
+│   │   └── consumer.go                  # shared-Envelope-Handler (user.* / boardtype.*)
+│   │                                    #   (Publishing: shared outbox.Worker, verdrahtet in main.go)
 │   └── config/
 │       └── config.go
 ├── migrations/

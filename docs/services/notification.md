@@ -1242,8 +1242,7 @@ services/notification/
 │   │   │   ├── project_member_added.go
 │   │   │   ├── project_member_removed.go # incl. Channel-Cleanup
 │   │   │   └── ...
-│   │   ├── publisher.go                 # Outbox -> RabbitMQ (für eigene Events)
-│   │   └── envelope.go
+│   │   └── envelope.go                  # (Publishing: shared outbox.Worker, verdrahtet in main.go)
 │   ├── cleanup/
 │   │   └── worker.go                    # Notification-Retention
 │   └── config/

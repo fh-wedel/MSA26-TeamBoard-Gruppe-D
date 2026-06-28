@@ -16,8 +16,9 @@ import (
 	"github.com/teamboard/services/boardregistry/internal/api"
 	"github.com/teamboard/services/boardregistry/internal/config"
 	"github.com/teamboard/services/boardregistry/internal/domain"
-	"github.com/teamboard/services/boardregistry/internal/events"
 	"github.com/teamboard/services/boardregistry/internal/repository"
+	"github.com/teamboard/shared/go/eventbus"
+	"github.com/teamboard/shared/go/outbox"
 )
 
 func main() {
@@ -58,8 +59,24 @@ func main() {
 	repo := repository.New(pool)
 	var svc domain.BoardTypeService = domain.NewService(repo)
 
-	publisher := events.NewPublisher(repo, rabbitConn, cfg.RabbitMQExchange, cfg.OutboxInterval, cfg.OutboxBatchSize)
-	go publisher.Run(ctx)
+	pub, err := eventbus.NewPublisher(rabbitConn, cfg.RabbitMQExchange)
+	if err != nil {
+		slog.Error("event publisher init failed", "error", err)
+		os.Exit(1)
+	}
+	defer pub.Close()
+	worker := outbox.NewWorker(outbox.Config{
+		Pool:         pool,
+		Publisher:    pub,
+		Producer:     "boardregistry-service",
+		PollInterval: cfg.OutboxInterval,
+		BatchSize:    int(cfg.OutboxBatchSize),
+	})
+	go func() {
+		if err := worker.Run(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("outbox worker stopped", "error", err)
+		}
+	}()
 
 	router := api.NewRouter(svc, pool, cfg.ServiceTokenSecret)
 	srv := &http.Server{

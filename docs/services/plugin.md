@@ -1519,13 +1519,11 @@ services/plugin/
 │   │   ├── http_client.go
 │   │   └── permission_cache.go
 │   ├── events/
-│   │   ├── consumer.go                  # RabbitMQ-Konsument
-│   │   ├── dispatcher.go                # Event → Pending-Deliveries
-│   │   ├── publisher.go                 # Outbox → RabbitMQ
+│   │   ├── consumer.go                  # shared-Envelope-Handler → Domain-Envelope-Mapping
 │   │   ├── handler_projects.go
 │   │   ├── handler_users.go
-│   │   ├── project_id_extractor.go      # Mapping Event-Type → Project-ID
-│   │   └── envelope.go
+│   │   └── envelope.go                  # Domain-Envelope-Alias
+│   │                                    #   (Publishing: shared outbox.Worker, verdrahtet in main.go)
 │   ├── cleanup/
 │   │   └── worker.go                    # Delivery-Retention
 │   └── config/

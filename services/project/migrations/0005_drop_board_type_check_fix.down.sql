@@ -1,1 +1,0 @@
--- No-op: re-adding the hardcoded allowlist is intentionally not supported.

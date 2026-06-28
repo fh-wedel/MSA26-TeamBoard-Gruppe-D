@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1140" width="1440" height="1140" font-family="'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <!-- soft card shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <!-- arrow markers (orient auto-start-reverse so marker-start/end both point outward) -->
+    <marker id="ah-indigo" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 Z" fill="#6366f1"/></marker>
+    <marker id="ah-violet" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 Z" fill="#8b5cf6"/></marker>
+    <marker id="ah-orange" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 Z" fill="#ea7317"/></marker>
+    <marker id="ah-gray" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker>
+  </defs>
+
+  <!-- ============ background ============ -->
+  <rect x="0" y="0" width="1440" height="1140" fill="#f5f7fb"/>
+
+  <!-- ============ title ============ -->
+  <text x="44" y="56" font-size="27" font-weight="700" fill="#0f172a">TeamBoard — Microservice Architecture</text>
+  <text x="44" y="84" font-size="14" fill="#64748b">Go · Chi · sqlc · PostgreSQL 16 · Redis 7 · RabbitMQ 3.12 · Traefik   ·   async via teamboard.events (Outbox + Envelope)</text>
+  <text x="1396" y="56" font-size="12" fill="#94a3b8" text-anchor="end">current · 2026-06-28</text>
+
+  <!-- ============ layer hints (right edge) ============ -->
+  <text x="1396" y="150" font-size="11" fill="#cbd5e1" text-anchor="end" font-weight="600" letter-spacing="1">CLIENT</text>
+  <text x="1396" y="260" font-size="11" fill="#cbd5e1" text-anchor="end" font-weight="600" letter-spacing="1">EDGE</text>
+  <text x="1396" y="322" font-size="11" fill="#cbd5e1" text-anchor="end" font-weight="600" letter-spacing="1">DOMAIN SERVICES</text>
+  <text x="1396" y="498" font-size="11" fill="#cbd5e1" text-anchor="end" font-weight="600" letter-spacing="1">EVENT BUS</text>
+  <text x="1396" y="692" font-size="11" fill="#cbd5e1" text-anchor="end" font-weight="600" letter-spacing="1">STATE</text>
+
+  <!-- ============ connectors drawn first (tuck under cards) ============ -->
+
+  <!-- persistence (gray) — middles pass behind the bus bar -->
+  <g stroke="#94a3b8" fill="none">
+    <path d="M270,452 L270,698" stroke-width="2.4" marker-end="url(#ah-gray)"/>
+    <path d="M128,452 Q150,560 258,698" stroke-width="1.2" opacity="0.5"/>
+    <path d="M522,452 Q420,560 284,698" stroke-width="1.2" opacity="0.5"/>
+    <path d="M1310,452 Q1320,560 286,690" stroke-width="0" opacity="0"/>
+    <!-- redis -->
+    <path d="M325,452 Q500,560 700,698" stroke-width="2" stroke-dasharray="2 4" marker-end="url(#ah-gray)"/>
+    <path d="M916,452 Q820,560 740,698" stroke-width="2" stroke-dasharray="2 4" marker-end="url(#ah-gray)"/>
+    <!-- minio -->
+    <path d="M719,452 Q900,560 1150,698" stroke-width="2.2" marker-end="url(#ah-gray)"/>
+  </g>
+
+  <!-- ============ event bus bar (covers gray middles) ============ -->
+  <rect x="200" y="500" width="1040" height="74" rx="16" fill="#fff4ea" stroke="#f4a259" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="200" y="500" width="1040" height="6" rx="3" fill="#ea7317"/>
+
+  <!-- async event connectors (orange) -->
+  <g stroke="#ea7317" fill="none" stroke-width="2.6">
+    <!-- pub only: Auth, Board Registry (single head down) -->
+    <path d="M128,453 L128,500" marker-end="url(#ah-orange)"/>
+    <path d="M1310,453 L1310,500" marker-end="url(#ah-orange)"/>
+    <!-- pub + sub: Project, Task, Document, Notification, Plugin (double head) -->
+    <path d="M325,453 L325,500" marker-start="url(#ah-orange)" marker-end="url(#ah-orange)"/>
+    <path d="M522,453 L522,500" marker-start="url(#ah-orange)" marker-end="url(#ah-orange)"/>
+    <path d="M719,453 L719,500" marker-start="url(#ah-orange)" marker-end="url(#ah-orange)"/>
+    <path d="M916,453 L916,500" marker-start="url(#ah-orange)" marker-end="url(#ah-orange)"/>
+    <path d="M1113,453 L1113,500" marker-start="url(#ah-orange)" marker-end="url(#ah-orange)"/>
+  </g>
+
+  <!-- bus labels (on top of orange lines) -->
+  <text x="720" y="532" font-size="15" font-weight="700" fill="#9a4a06" text-anchor="middle">RabbitMQ · teamboard.events (topic exchange)  +  .dlx (dead-letter)</text>
+  <text x="720" y="554" font-size="12" fill="#b45309" text-anchor="middle">shared Outbox.Worker → publish (broker confirms)   ·   Envelope   ·   consume (idempotent · processed_events)</text>
+
+  <!-- ============ gateway → services (sky routing) ============ -->
+  <g stroke="#38bdf8" fill="none" stroke-width="1.4" opacity="0.85">
+    <path d="M720,298 L128,326"/>
+    <path d="M720,298 L325,326"/>
+    <path d="M720,298 L522,326"/>
+    <path d="M720,298 L719,326"/>
+    <path d="M720,298 L916,326"/>
+    <path d="M720,298 L1113,326"/>
+    <path d="M720,298 L1310,326"/>
+  </g>
+
+  <!-- ============ synchronous internal calls (violet, above the row) ============ -->
+  <g stroke="#8b5cf6" fill="none" stroke-width="2" stroke-dasharray="6 4">
+    <path d="M916,330 Q620,256 333,330" marker-end="url(#ah-violet)"/>
+    <path d="M333,328 Q820,222 1302,328" marker-end="url(#ah-violet)"/>
+  </g>
+  <text x="412" y="246" font-size="11.5" fill="#7c3aed" text-anchor="end">internal permission check · cached 30s</text>
+  <text x="412" y="262" font-size="10.5" fill="#a78bfa" text-anchor="end">Task · Document · Notification · Plugin → Project</text>
+  <text x="1028" y="250" font-size="11.5" fill="#7c3aed" text-anchor="start">board-type resolve · cached (boardtype.*)</text>
+
+  <!-- ============ client edges ============ -->
+  <path d="M720,186 L720,228" stroke="#6366f1" stroke-width="2.4" fill="none" marker-end="url(#ah-indigo)"/>
+  <text x="732" y="212" font-size="11" fill="#4f46e5">HTTPS</text>
+  <path d="M838,150 Q990,196 918,328" stroke="#6366f1" stroke-width="2.2" stroke-dasharray="6 4" fill="none" marker-start="url(#ah-indigo)" marker-end="url(#ah-indigo)"/>
+  <text x="948" y="206" font-size="11" fill="#4f46e5" text-anchor="middle">WebSocket</text>
+
+  <!-- ============ Browser ============ -->
+  <g filter="url(#shadow)">
+    <rect x="600" y="120" width="240" height="66" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="600" y="120" width="240" height="6" rx="3" fill="#6366f1"/>
+  </g>
+  <text x="720" y="152" font-size="15" font-weight="700" fill="#1e293b" text-anchor="middle">🌐  Browser</text>
+  <text x="720" y="172" font-size="11.5" fill="#64748b" text-anchor="middle">React SPA · view registry (board views)</text>
+
+  <!-- ============ Gateway ============ -->
+  <g filter="url(#shadow)">
+    <rect x="420" y="230" width="600" height="68" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+    <rect x="420" y="230" width="600" height="6" rx="3" fill="#0ea5e9"/>
+  </g>
+  <text x="446" y="262" font-size="15.5" font-weight="700" fill="#1e293b">Traefik API Gateway</text>
+  <rect x="956" y="246" width="44" height="22" rx="11" fill="#e0f2fe"/>
+  <text x="978" y="261" font-size="12" font-weight="700" fill="#0369a1" text-anchor="middle">:80</text>
+  <text x="446" y="284" font-size="11.5" fill="#64748b">JWT validation · CORS · rate limiting · trace-id injection · routing</text>
+
+  <!-- ============ Domain services row ============ -->
+  <!-- helper: card x=37.. width 176, top y=330 height 124 -->
+
+  <!-- Auth -->
+  <g filter="url(#shadow)"><rect x="40" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="40" y="330" width="176" height="6" rx="3" fill="#10b981"/></g>
+  <text x="56" y="364" font-size="14.5" font-weight="700" fill="#1e293b">Auth</text>
+  <rect x="158" y="350" width="46" height="20" rx="10" fill="#d1fae5"/><text x="181" y="364" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">8001</text>
+  <text x="56" y="388" font-size="11" fill="#475569">JWT issuance · login</text>
+  <text x="56" y="404" font-size="11" fill="#475569">register · JWKS</text>
+  <text x="56" y="442" font-size="10" font-weight="700" fill="#ea7317">pub</text>
+
+  <!-- Project (authoritative) -->
+  <g filter="url(#shadow)"><rect x="237" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#ddd6fe"/><rect x="237" y="330" width="176" height="6" rx="3" fill="#8b5cf6"/></g>
+  <text x="253" y="364" font-size="14.5" font-weight="700" fill="#1e293b">Project</text>
+  <rect x="355" y="350" width="46" height="20" rx="10" fill="#ede9fe"/><text x="378" y="364" font-size="11" font-weight="700" fill="#6d28d9" text-anchor="middle">8002</text>
+  <text x="253" y="388" font-size="11" fill="#475569">Projects · Boards</text>
+  <text x="253" y="404" font-size="11" fill="#475569">Members</text>
+  <text x="253" y="421" font-size="10.5" font-weight="700" fill="#7c3aed">★ permission authority</text>
+  <text x="253" y="442" font-size="10" font-weight="700" fill="#ea7317">pub · sub</text>
+
+  <!-- Task -->
+  <g filter="url(#shadow)"><rect x="434" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="434" y="330" width="176" height="6" rx="3" fill="#10b981"/></g>
+  <text x="450" y="364" font-size="14.5" font-weight="700" fill="#1e293b">Task</text>
+  <rect x="552" y="350" width="46" height="20" rx="10" fill="#d1fae5"/><text x="575" y="364" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">8003</text>
+  <text x="450" y="388" font-size="11" fill="#475569">Tasks · Comments</text>
+  <text x="450" y="404" font-size="11" fill="#475569">status transitions</text>
+  <text x="450" y="442" font-size="10" font-weight="700" fill="#ea7317">pub · sub</text>
+
+  <!-- Document -->
+  <g filter="url(#shadow)"><rect x="631" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="631" y="330" width="176" height="6" rx="3" fill="#10b981"/></g>
+  <text x="647" y="364" font-size="14.5" font-weight="700" fill="#1e293b">Document</text>
+  <rect x="749" y="350" width="46" height="20" rx="10" fill="#d1fae5"/><text x="772" y="364" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">8004</text>
+  <text x="647" y="388" font-size="11" fill="#475569">Metadata · Versions</text>
+  <text x="647" y="404" font-size="11" fill="#475569">pre-signed URLs</text>
+  <text x="647" y="442" font-size="10" font-weight="700" fill="#ea7317">pub · sub</text>
+
+  <!-- Notification -->
+  <g filter="url(#shadow)"><rect x="828" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="828" y="330" width="176" height="6" rx="3" fill="#10b981"/></g>
+  <text x="844" y="364" font-size="14.5" font-weight="700" fill="#1e293b">Notification</text>
+  <rect x="946" y="350" width="46" height="20" rx="10" fill="#d1fae5"/><text x="969" y="364" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">8005</text>
+  <text x="844" y="388" font-size="11" fill="#475569">WebSocket push</text>
+  <text x="844" y="404" font-size="11" fill="#475569">persistent notifs</text>
+  <text x="844" y="442" font-size="10" font-weight="700" fill="#ea7317">pub · sub</text>
+
+  <!-- Plugin / Webhook -->
+  <g filter="url(#shadow)"><rect x="1025" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="1025" y="330" width="176" height="6" rx="3" fill="#10b981"/></g>
+  <text x="1041" y="364" font-size="14.5" font-weight="700" fill="#1e293b">Plugin</text>
+  <rect x="1143" y="350" width="46" height="20" rx="10" fill="#d1fae5"/><text x="1166" y="364" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">8006</text>
+  <text x="1041" y="388" font-size="11" fill="#475569">Webhook registry</text>
+  <text x="1041" y="404" font-size="11" fill="#475569">HMAC · retry · breaker</text>
+  <text x="1041" y="442" font-size="10" font-weight="700" fill="#ea7317">pub · sub</text>
+
+  <!-- Board Registry (authoritative) -->
+  <g filter="url(#shadow)"><rect x="1222" y="330" width="176" height="124" rx="14" fill="#ffffff" stroke="#ddd6fe"/><rect x="1222" y="330" width="176" height="6" rx="3" fill="#8b5cf6"/></g>
+  <text x="1238" y="364" font-size="13.5" font-weight="700" fill="#1e293b">Board Registry</text>
+  <rect x="1340" y="350" width="46" height="20" rx="10" fill="#ede9fe"/><text x="1363" y="364" font-size="11" font-weight="700" fill="#6d28d9" text-anchor="middle">8007</text>
+  <text x="1238" y="388" font-size="11" fill="#475569">Board-type defs</text>
+  <text x="1238" y="404" font-size="11" fill="#475569">presentation specs</text>
+  <text x="1238" y="421" font-size="10.5" font-weight="700" fill="#7c3aed">★ runtime registration</text>
+  <text x="1238" y="442" font-size="10" font-weight="700" fill="#ea7317">pub</text>
+
+  <!-- ============ Data stores ============ -->
+  <!-- PostgreSQL -->
+  <g filter="url(#shadow)"><rect x="120" y="700" width="300" height="120" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="120" y="700" width="300" height="6" rx="3" fill="#2f6f9f"/></g>
+  <text x="140" y="736" font-size="15" font-weight="700" fill="#1e293b">🗄  PostgreSQL 16</text>
+  <text x="140" y="760" font-size="11" fill="#475569">one logical DB per service</text>
+  <text x="140" y="778" font-size="10.5" fill="#64748b">auth · project · task · document</text>
+  <text x="140" y="794" font-size="10.5" fill="#64748b">notification · plugin · boardregistry</text>
+  <text x="140" y="812" font-size="10.5" font-weight="600" fill="#2f6f9f">SQL write + Outbox event · one tx</text>
+
+  <!-- Redis -->
+  <g filter="url(#shadow)"><rect x="570" y="700" width="300" height="120" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="570" y="700" width="300" height="6" rx="3" fill="#dc2626"/></g>
+  <text x="590" y="736" font-size="15" font-weight="700" fill="#1e293b">⚡  Redis 7</text>
+  <text x="590" y="760" font-size="11" fill="#475569">permission cache · TTL 30s</text>
+  <text x="590" y="778" font-size="11" fill="#475569">(invalidated on project.member.*)</text>
+  <text x="590" y="800" font-size="11" fill="#475569">WebSocket backplane (pub/sub)</text>
+
+  <!-- MinIO / S3 -->
+  <g filter="url(#shadow)"><rect x="1020" y="700" width="300" height="120" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="1020" y="700" width="300" height="6" rx="3" fill="#c026d3"/></g>
+  <text x="1040" y="736" font-size="15" font-weight="700" fill="#1e293b">🪣  MinIO / S3</text>
+  <text x="1040" y="760" font-size="11" fill="#475569">document object storage</text>
+  <text x="1040" y="778" font-size="11" fill="#475569">pre-signed upload / download</text>
+  <text x="1040" y="800" font-size="11" fill="#475569">versioned blobs</text>
+
+  <!-- ============ Legend ============ -->
+  <rect x="40" y="868" width="1358" height="232" rx="16" fill="#ffffff" stroke="#e2e8f0" filter="url(#shadow)"/>
+  <text x="64" y="900" font-size="14" font-weight="700" fill="#0f172a" letter-spacing="0.5">LEGEND</text>
+
+  <!-- line samples -->
+  <g stroke-width="2.6" fill="none">
+    <path d="M64,926 L120,926" stroke="#6366f1" marker-end="url(#ah-indigo)"/>
+    <path d="M64,958 L120,958" stroke="#38bdf8"/>
+    <path d="M64,990 L120,990" stroke="#8b5cf6" stroke-dasharray="6 4" marker-end="url(#ah-violet)"/>
+    <path d="M64,1022 L120,1022" stroke="#ea7317" marker-start="url(#ah-orange)" marker-end="url(#ah-orange)"/>
+    <path d="M64,1054 L120,1054" stroke="#94a3b8" stroke-dasharray="2 4" marker-end="url(#ah-gray)"/>
+  </g>
+  <text x="134" y="930" font-size="12" fill="#334155">Client edge — HTTPS request / WebSocket push</text>
+  <text x="134" y="962" font-size="12" fill="#334155">Gateway routing — JWT validate · trace-id inject</text>
+  <text x="134" y="994" font-size="12" fill="#334155">Synchronous internal API — service-token, cached</text>
+  <text x="134" y="1026" font-size="12" fill="#334155">Async domain event — Outbox → RabbitMQ → consumer (double head = pub + sub)</text>
+  <text x="134" y="1058" font-size="12" fill="#334155">Persistence — DB · cache · object store</text>
+
+  <!-- notes column -->
+  <line x1="720" y1="912" x2="720" y2="1068" stroke="#e2e8f0"/>
+  <text x="748" y="930" font-size="12.5" font-weight="700" fill="#0f172a">Cross-cutting patterns</text>
+  <text x="748" y="954" font-size="11.5" fill="#475569">• Transactional Outbox: domain mutation + event written in the</text>
+  <text x="760" y="970" font-size="11.5" fill="#475569">same DB tx; shared Outbox.Worker polls &amp; publishes with confirms.</text>
+  <text x="748" y="992" font-size="11.5" fill="#475569">• Envelope: event_id · event_type · version · trace_id · producer ·</text>
+  <text x="760" y="1008" font-size="11.5" fill="#475569">aggregate · actor · payload   (MessageId = event_id).</text>
+  <text x="748" y="1030" font-size="11.5" fill="#475569">• Idempotency: consumers dedupe via processed_events;</text>
+  <text x="760" y="1046" font-size="11.5" fill="#475569">malformed messages dead-letter to teamboard.events.dlx.</text>
+  <text x="748" y="1068" font-size="11.5" fill="#7c3aed">★ authoritative source of truth for its domain.</text>
+</svg>

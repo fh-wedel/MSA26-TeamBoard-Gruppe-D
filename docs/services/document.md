@@ -1331,11 +1331,8 @@ services/document/
 │   │   ├── worker.go                    # Pending- und Hard-Delete-Cleanup
 │   │   └── worker_test.go
 │   ├── events/
-│   │   ├── publisher.go
-│   │   ├── consumer.go
-│   │   ├── handler_users.go
-│   │   ├── handler_projects.go
-│   │   └── envelope.go
+│   │   ├── consumer.go                  # shared-Envelope-Handler (project.* / user.*)
+│   │   └── util.go                      # (Publishing: shared outbox.Worker, verdrahtet in main.go)
 │   └── config/
 │       └── config.go
 ├── migrations/

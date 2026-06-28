@@ -1109,9 +1109,6 @@ services/auth/
 │   │   │   └── outbox.sql.go
 │   │   ├── repository.go                # Interface
 │   │   └── postgres.go                  # Implementation
-│   ├── events/
-│   │   ├── publisher.go                 # Outbox-Reader → RabbitMQ
-│   │   └── envelope.go                  # Event-Envelope-Helper
 │   ├── keys/
 │   │   ├── manager.go                   # Key-Rotation + JWKS-Build
 │   │   └── crypto.go                    # AES-GCM für Private-Key-Encryption
@@ -1409,7 +1406,7 @@ Empfohlene Reihenfolge für TDD-orientiertes Vorgehen:
 4. **JWT + Key-Manager** (`internal/keys/`, `internal/domain/jwt.go`)
 5. **Service-Layer** (`internal/domain/service_impl.go`) mit Mock-Repository
 6. **HTTP-Handler** (`internal/api/`)
-7. **Outbox-Publisher** (`internal/events/publisher.go`)
+7. **Outbox-Publishing** — shared `outbox.Worker` + `eventbus.NewPublisher`, verdrahtet in `main.go` (kein service-eigener Publisher mehr)
 8. **Wiring in `main.go`**
 9. **End-to-End-Test gegen Docker-Compose-Stack**
 
