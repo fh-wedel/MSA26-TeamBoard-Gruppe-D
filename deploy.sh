@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Deploy a tag on this box. Invoked by GitHub Actions over SSH with these env vars:
 #     TAG, REGISTRY, GHCR_USER, GHCR_TOKEN
-# Runs as the ec2-user (member of the docker group). Safe to run repeatedly.
+# The CI step provisions the box (docker, compose, git clone) before calling this;
+# here we additionally generate /opt/teamboard/.env with random secrets on first run,
+# so a fresh/reset EC2 box needs no manual setup. Runs as ec2-user. Idempotent.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -12,6 +14,25 @@ REGISTRY="${REGISTRY:?REGISTRY env var is required, e.g. ghcr.io/<owner>}"
 # earlier one is still running. Wait up to 10 min for the lock.
 exec 9>/tmp/teamboard-deploy.lock
 flock -w 600 9 || { echo "another deploy is already running; aborting"; exit 1; }
+
+# Generate box secrets on first run (gitignored, so they survive checkout resets).
+if [ ! -f "$DIR/.env" ]; then
+  echo "==> Generating $DIR/.env with random secrets"
+  gen() { openssl rand -hex 24; }   # hex = URL-safe (these go inside DB/AMQP URLs)
+  cat > "$DIR/.env" <<EOF
+POSTGRES_USER=teamboard
+POSTGRES_PASSWORD=$(gen)
+RABBITMQ_USER=teamboard
+RABBITMQ_PASSWORD=$(gen)
+MINIO_ROOT_USER=teamboard
+MINIO_ROOT_PASSWORD=$(gen)
+KEY_ENCRYPTION_KEY=$(openssl rand -base64 32)
+SERVICE_TOKEN_SECRET=$(openssl rand -hex 32)
+SEED_ALICE_PASSWORD=AliceSecret123!
+SEED_BOB_PASSWORD=BobSecret123!
+EOF
+  chmod 600 "$DIR/.env"
+fi
 
 # Pull the exact source revision (compose files, migrations, init scripts, traefik
 # config) matching the images. The .env file is gitignored, so it survives.

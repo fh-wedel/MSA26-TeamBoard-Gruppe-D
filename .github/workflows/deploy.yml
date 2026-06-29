@@ -71,11 +71,48 @@ jobs:
           REGISTRY: ghcr.io/${{ env.OWNER }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          # Forward these into the remote shell so deploy.sh can read them.
-          envs: TAG,REGISTRY,GHCR_USER,GHCR_TOKEN
+          # Forward these into the remote shell so the bootstrap + deploy.sh can read them.
+          envs: TAG,REGISTRY,GHCR_USER,GHCR_TOKEN,REPO
           command_timeout: 15m
-          script: bash /opt/teamboard/deploy.sh
+          # Self-provisioning: on a fresh/reset box install git + docker + compose,
+          # clone the repo with the ephemeral GITHUB_TOKEN (works for private repos),
+          # sync to the pushed commit, then hand off to deploy.sh. No manual setup.
+          script: |
+            set -euo pipefail
+
+            # ── tools: git + docker + compose plugin (idempotent) ──────────────
+            command -v git >/dev/null 2>&1 || sudo dnf install -y git
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo dnf install -y docker
+              sudo systemctl enable --now docker
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins
+              ARCH="$(uname -m)"   # x86_64 or aarch64
+              sudo curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${ARCH}" \
+                -o /usr/local/lib/docker/cli-plugins/docker-compose
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            fi
+            # group membership applies to the *next* session — handled below via `sg`.
+            id -nG | grep -qw docker || sudo usermod -aG docker "$(id -un)"
+
+            # ── repo present at /opt/teamboard (token clone for private repo) ───
+            if [ ! -d /opt/teamboard/.git ]; then
+              sudo mkdir -p /opt/teamboard
+              sudo chown "$(id -un):$(id -gn)" /opt/teamboard
+              git clone "https://x-access-token:${GHCR_TOKEN}@github.com/${REPO}.git" /opt/teamboard
+            fi
+            # refresh auth with the current ephemeral token, then sync to this commit
+            git -C /opt/teamboard remote set-url origin "https://x-access-token:${GHCR_TOKEN}@github.com/${REPO}.git"
+            git -C /opt/teamboard fetch --quiet --all
+            git -C /opt/teamboard checkout --quiet --force "$TAG"
+
+            # ── deploy (use `sg` so the freshly-added docker group is active) ───
+            if docker info >/dev/null 2>&1; then
+              bash /opt/teamboard/deploy.sh
+            else
+              sg docker -c "bash /opt/teamboard/deploy.sh"
+            fi
