@@ -34,7 +34,8 @@
 - **Single Entry Point** für externe Clients (Frontend, CLI, externe APIs)
 - **Routing** anhand Pfad-Prefixe zu Services
 - **TLS-Termination** in Produktion
-- **Rate Limiting** pro IP und für sensitive Endpoints (Login, Register)
+- **Rate Limiting** pro IP (global am Edge). Login-/Register-spezifisches Limit
+  liegt im Auth-Service (Redis-Sliding-Window), nicht am Gateway.
 - **CORS** für Browser-Clients
 - **WebSocket-Upgrade** transparent durchreichen
 - **Trace-ID-Initiierung** wenn nicht vom Client mitgeliefert
@@ -129,46 +130,37 @@ api:
 entryPoints:
   web:
     address: ":80"
-    forwardedHeaders:
-      insecure: true
-  metrics:
-    address: ":8082"
+    # Edge-Middlewares global auf alle gerouteten Services anwenden
+    # (Namen aus dynamic.yml, file-Provider).
+    http:
+      middlewares:
+        - secure-headers@file
+        - cors@file
+        - ratelimit@file
+  websecure:
+    address: ":443"
 
 providers:
   docker:
+    endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
-    network: teamboard_teamboard-net
+    network: teamboard-net
   file:
-    directory: /etc/traefik/dynamic
+    filename: /etc/traefik/dynamic.yml
     watch: true
 
 log:
   level: INFO
-  format: json
 
-accessLog:
-  format: json
-  filters:
-    statusCodes:
-      - "400-599"
-  fields:
-    headers:
-      defaultMode: keep
-      names:
-        Authorization: redact
-        Cookie: redact
-
-metrics:
-  prometheus:
-    entryPoint: metrics
-
-tracing:
-  serviceName: traefik-gateway
-  otlp:
-    grpc:
-      endpoint: jaeger:4317
-      insecure: true
+accessLog: {}
 ```
+
+> **Status (committed):** Die obige Datei entspricht dem aktuell eingecheckten
+> `infra/traefik/traefik.yml` (Provider docker+file, Web-Entrypoint mit globalen
+> Edge-Middlewares). **Zielkonfiguration, noch nicht aktiviert:** strukturierter
+> JSON-Access-Log mit `Authorization`/`Cookie`-Redaction, ein `metrics`-Entrypoint
+> (Prometheus) und OTLP-Tracing zu Jaeger. Diese werden ergänzt, sobald
+> Observability am Edge benötigt wird.
 
 ### 3.2 Dynamische Konfiguration über Docker-Labels
 
@@ -227,77 +219,71 @@ services:
 
 **Priority-Logik:** Höhere Priority gewinnt. `task` (20) > `project` (10) für `/boards/{id}/tasks`. `document` und `plugin` (jeweils 20) > `project` (10) für ihre Project-Subpfade.
 
-### 3.3 Middleware-Definitionen `infra/traefik/dynamic/middlewares.yml`
+### 3.3 Middleware-Definitionen `infra/traefik/dynamic.yml`
+
+Drei Middlewares, vom file-Provider geladen und **global am Web-Entrypoint**
+angewandt (siehe §3.1) — kein Per-Router-Label nötig:
 
 ```yaml
 http:
   middlewares:
-    rate-limit:
-      rateLimit:
-        average: 100
-        period: 1s
-        burst: 200
-        sourceCriterion:
-          ipStrategy:
-            depth: 1
-
-    auth-rate-limit:
-      rateLimit:
-        average: 5
-        period: 60s
-        burst: 10
-
-    cors-default:
-      headers:
-        accessControlAllowMethods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
-        accessControlAllowHeaders:
-          - "*"
-        accessControlAllowOriginListRegex:
-          - "^http://localhost:3000$"
-          - "^http://localhost$"
-          - "^https://teamboard\\.example$"
-        accessControlAllowCredentials: true
-        accessControlMaxAge: 3600
-        addVaryHeader: true
-
-    security-headers:
+    # Security-Header. stsSeconds (HSTS) wirkt nur über HTTPS — Browser ignorieren
+    # es am lokalen Plaintext-:80, daher harmlos hier und automatisch aktiv, sobald
+    # TLS am Edge terminiert.
+    secure-headers:
       headers:
         frameDeny: true
         contentTypeNosniff: true
         browserXssFilter: true
         referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "geolocation=(), microphone=(), camera=()"
         stsSeconds: 31536000
         stsIncludeSubdomains: true
+        stsPreload: true
+        customResponseHeaders:
+          Server: ""
+          X-Powered-By: ""
 
-    body-limit:
-      buffering:
-        maxRequestBodyBytes: 10485760
-        memRequestBodyBytes: 1048576
+    # CORS für die Browser-SPA (beantwortet Preflight-OPTIONS für erlaubte Origins).
+    cors:
+      headers:
+        accessControlAllowMethods: [GET, POST, PATCH, PUT, DELETE, OPTIONS]
+        accessControlAllowHeaders: [Authorization, Content-Type]
+        accessControlAllowOriginList:
+          - "http://localhost:3000"
+          - "http://localhost:5173"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # Rate-Limit pro Quell-IP (Token-Bucket). average = nachhaltige Rate über
+    # `period`, burst = kurzfristige Spitze (deckt parallele Requests beim
+    # SPA-Seitenaufbau ab).
+    ratelimit:
+      rateLimit:
+        average: 50
+        period: 1s
+        burst: 100
 ```
 
-### 3.4 Middleware-Anwendung über Service-Labels
+Der Access-Log ist JSON-formatiert und redactet `Authorization`/`Cookie`
+(`infra/traefik/traefik.yml`). **Bekannte Restlücke:** als Query-Parameter
+übergebene Tokens (WebSocket `/ws?token=…`) erscheinen weiterhin in der geloggten
+Request-URI — Traefik kann Query-Strings nicht redacten (siehe `docs/TODO.md`).
 
-```yaml
-services:
-  auth:
-    labels:
-      - traefik.http.routers.auth.middlewares=auth-rate-limit@file,cors-default@file,security-headers@file,body-limit@file
+### 3.4 Middleware-Anwendung (global am Entrypoint)
 
-  task:
-    labels:
-      - traefik.http.routers.task.middlewares=rate-limit@file,cors-default@file,security-headers@file,body-limit@file
+Die drei Middlewares werden **einmal** am `web`-Entrypoint gesetzt
+(`entryPoints.web.http.middlewares` in `traefik.yml`, siehe §3.1) und greifen damit
+für **alle** gerouteten Services. Die Service-Labels in §3.2 enthalten daher nur
+`rule` + `loadbalancer` — keine Per-Router-`middlewares`.
 
-  notification:
-    labels:
-      # WebSocket braucht kein body-limit (Frames sind kein "Body")
-      - traefik.http.routers.notification.middlewares=rate-limit@file,cors-default@file,security-headers@file
-```
+> **Nicht im MVP (optional/geplant):** ein separates, strengeres `auth-rate-limit`
+> nur für `/api/v1/auth/*`, ein `body-limit` (Request-Buffering) und eine
+> CORS-Origin-Regex-Liste. Hinweis: ein **Login-Rate-Limit existiert bereits** —
+> aber als Redis-Sliding-Window **im Auth-Service** (`ratelimit:login:<email>`),
+> nicht am Gateway. Per-Router-Middlewares über Labels sind jederzeit additiv
+> möglich, falls einzelne Routen abweichende Limits brauchen.
 
 ---
 

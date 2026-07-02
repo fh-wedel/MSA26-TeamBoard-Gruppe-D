@@ -151,6 +151,8 @@ services:
 
   traefik:
     image: traefik:v3.0
+    # Static config (providers, entrypoints, edge middlewares) is driven by
+    # infra/traefik/traefik.yml, which Traefik auto-loads from /etc/traefik.
     command:
       - --api.insecure=true
       - --providers.docker=true
@@ -212,7 +214,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`) || PathPrefix(`/.well-known`)"
+      - "traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`) || PathPrefix(`/.well-known`) || PathPrefix(`/auth`)"
       - traefik.http.services.auth.loadbalancer.server.port=8001
     networks:
       - teamboard-net
@@ -230,6 +232,7 @@ services:
       RABBIT_QUEUE: project-service
       REDIS_URL: redis://redis:6379/1
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
+      JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
       BOARDREGISTRY_SERVICE_URL: http://boardregistry:8007
       OTEL_ENDPOINT: http://jaeger:4317
     depends_on:
@@ -253,7 +256,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.project.rule=PathPrefix(`/api/v1/projects`) || PathPrefix(`/api/v1/boards`) || PathPrefix(`/api/v1/invitations`)"
+      - "traefik.http.routers.project.rule=PathPrefix(`/api/v1/projects`) || PathPrefix(`/api/v1/boards`) || PathPrefix(`/api/v1/invitations`) || PathPrefix(`/project`)"
       - traefik.http.services.project.loadbalancer.server.port=8002
     networks:
       - teamboard-net
@@ -271,6 +274,7 @@ services:
       RABBIT_QUEUE: task-service
       PROJECT_SERVICE_URL: http://project:8002
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
+      JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
       OTEL_ENDPOINT: http://jaeger:4317
     depends_on:
       migrate:
@@ -289,7 +293,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.task.rule=PathPrefix(`/api/v1/tasks`) || PathPrefix(`/api/v1/comments`) || PathRegexp(`^/api/v1/boards/[^/]+/tasks`)"
+      - "traefik.http.routers.task.rule=PathPrefix(`/api/v1/tasks`) || PathPrefix(`/api/v1/comments`) || PathRegexp(`^/api/v1/boards/[^/]+/tasks`) || PathPrefix(`/task`)"
       - "traefik.http.routers.task.priority=100"
       - traefik.http.services.task.loadbalancer.server.port=8003
     networks:
@@ -311,6 +315,7 @@ services:
       S3_PUBLIC_ENDPOINT: http://localhost:9000
       PROJECT_SERVICE_URL: http://project:8002
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
+      JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -332,7 +337,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.document.rule=PathPrefix(`/api/v1/documents`)"
+      - "traefik.http.routers.document.rule=PathPrefix(`/api/v1/documents`) || PathPrefix(`/document`)"
       - traefik.http.services.document.loadbalancer.server.port=8004
     networks:
       - teamboard-net
@@ -371,7 +376,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.notification.rule=PathPrefix(`/api/v1/notifications`) || PathPrefix(`/ws`)"
+      - "traefik.http.routers.notification.rule=PathPrefix(`/api/v1/notifications`) || PathPrefix(`/ws`) || PathPrefix(`/notification`)"
       - traefik.http.services.notification.loadbalancer.server.port=8005
     networks:
       - teamboard-net
@@ -418,7 +423,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.plugin.rule=PathPrefix(`/api/v1/webhooks`) || PathRegexp(`^/api/v1/projects/[^/]+/webhooks`)"
+      - "traefik.http.routers.plugin.rule=PathPrefix(`/api/v1/webhooks`) || PathRegexp(`^/api/v1/projects/[^/]+/webhooks`) || PathPrefix(`/plugin`)"
       - "traefik.http.routers.plugin.priority=100"
       - traefik.http.services.plugin.loadbalancer.server.port=8006
     networks:
@@ -437,6 +442,7 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       RABBITMQ_EXCHANGE: teamboard.events
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
+      JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -452,7 +458,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.boardregistry.rule=PathPrefix(`/api/v1/board-types`)"
+      - "traefik.http.routers.boardregistry.rule=PathPrefix(`/api/v1/board-types`) || PathPrefix(`/board-registry`)"
       - traefik.http.services.boardregistry.loadbalancer.server.port=8007
     networks:
       - teamboard-net

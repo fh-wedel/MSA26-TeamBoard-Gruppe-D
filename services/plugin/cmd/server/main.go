@@ -20,8 +20,10 @@ import (
 	"github.com/teamboard/services/plugin/internal/events"
 	"github.com/teamboard/services/plugin/internal/projectclient"
 	"github.com/teamboard/services/plugin/internal/repository"
+	"github.com/teamboard/shared/go/authmiddleware"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -53,10 +55,13 @@ func main() {
 	defer amqpConn.Close()
 
 	// Wiring
+	stIssuer := servicetoken.NewIssuer(cfg.Security.ServiceTokenSecret)
+	jwks := authmiddleware.NewJWKSSource(cfg.JWT.JWKSURL)
+
 	repo := repository.New(pool)
 	permChecker := projectclient.New(
 		cfg.ProjectService.URL,
-		cfg.Security.ServiceTokenSecret,
+		stIssuer,
 		cfg.ProjectService.Timeout,
 		cfg.ProjectService.PermissionCacheTTL,
 	)
@@ -104,7 +109,7 @@ func main() {
 	idemStore := eventbus.IdempotencyFuncs{Has: repo.WasEventProcessed, Mark: repo.MarkEventProcessed}
 
 	// HTTP server
-	router := api.NewRouter(webhookSvc, pool)
+	router := api.NewRouter(webhookSvc, pool, jwks, cfg.JWT.Issuer, cfg.JWT.Audience)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,

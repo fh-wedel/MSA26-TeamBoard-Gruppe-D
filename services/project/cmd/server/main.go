@@ -21,8 +21,10 @@ import (
 	"github.com/teamboard/services/project/internal/domain"
 	"github.com/teamboard/services/project/internal/events"
 	"github.com/teamboard/services/project/internal/repository"
+	"github.com/teamboard/shared/go/authmiddleware"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -72,10 +74,18 @@ func main() {
 	}
 	defer rabbitConn.Close()
 
+	// Service-to-service token (HS256, shared secret): issuer for outbound calls,
+	// verifier for the internal permissions endpoint.
+	stIssuer := servicetoken.NewIssuer(cfg.ServiceTokenSecret)
+	stVerifier := servicetoken.NewVerifier(cfg.ServiceTokenSecret, "internal")
+
+	// User-JWT validation source (RS256 against the auth service's JWKS).
+	jwks := authmiddleware.NewJWKSSource(cfg.JWKSURL)
+
 	// Domain wiring
 	repo := repository.New(pool)
 	permCache := cache.NewRedis(redisClient)
-	boardTypes := boardtypeclient.New(cfg.BoardRegistryURL, cfg.ServiceTokenSecret, cfg.BoardRegistryTimeout, cfg.BoardTypeCacheTTL)
+	boardTypes := boardtypeclient.New(cfg.BoardRegistryURL, stIssuer, cfg.BoardRegistryTimeout, cfg.BoardTypeCacheTTL)
 	svc := domain.NewProjectService(repo, permCache, boardTypes)
 
 	// Outbox publisher (shared eventbus + outbox worker)
@@ -117,7 +127,7 @@ func main() {
 	}()
 
 	// HTTP server
-	router := api.NewRouter(svc, cfg.ServiceTokenSecret)
+	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      router,

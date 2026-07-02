@@ -24,8 +24,10 @@ import (
 	"github.com/teamboard/services/notification/internal/push"
 	"github.com/teamboard/services/notification/internal/repository"
 	"github.com/teamboard/services/notification/internal/ws"
+	"github.com/teamboard/shared/go/authmiddleware"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -79,8 +81,11 @@ func main() {
 	defer amqpConn.Close()
 
 	// ── Application wiring ────────────────────────────────────────────────────
+	stIssuer := servicetoken.NewIssuer(cfg.ServiceTokenSecret)
+	jwks := authmiddleware.NewJWKSSource(cfg.JWKSUrl)
+
 	repo := repository.New(pool)
-	projClient := projectclient.New(cfg.ProjectServiceURL, cfg.ServiceTokenSecret)
+	projClient := projectclient.New(cfg.ProjectServiceURL, stIssuer)
 
 	hub := ws.NewHub()
 	registry := push.NewRegistry(rdb, cfg.InstanceID)
@@ -132,7 +137,7 @@ func main() {
 	go backplane.RunSubscriber(ctx)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
-	router := api.NewRouter(notifSvc, pushSvc, hub)
+	router := api.NewRouter(notifSvc, pushSvc, hub, jwks, cfg.JWTIssuer, cfg.JWTAudience)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,

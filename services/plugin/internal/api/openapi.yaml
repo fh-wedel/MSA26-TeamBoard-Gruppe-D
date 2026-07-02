@@ -1,0 +1,350 @@
+openapi: 3.1.0
+info:
+  title: TeamBoard Plugin / Webhook Service
+  version: 1.0.0
+  description: >
+    Webhook registration and delivery with retry, circuit breaking and HMAC
+    signing. All endpoints require a bearer JWT issued by the Auth service.
+servers:
+  - url: http://localhost/api/v1
+    description: Via Traefik gateway
+  - url: http://localhost:8006/api/v1
+    description: Direct service port (when published)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: webhooks
+    description: Webhook registration and lifecycle
+  - name: deliveries
+    description: Delivery attempts (audit log)
+
+paths:
+  /projects/{projectId}/webhooks:
+    parameters:
+      - $ref: '#/components/parameters/projectId'
+    get:
+      summary: List webhooks for a project
+      operationId: listWebhooks
+      tags: [webhooks]
+      responses:
+        '200':
+          description: Webhook list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookList' }
+        '403': { $ref: '#/components/responses/Problem' }
+    post:
+      summary: Create webhook
+      operationId: createWebhook
+      tags: [webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWebhookRequest' }
+      responses:
+        '201':
+          description: Created — includes the secret, which is visible only once.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookCreatedResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /webhooks/{webhookId}:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+    get:
+      summary: Get webhook
+      operationId: getWebhook
+      tags: [webhooks]
+      responses:
+        '200':
+          description: Webhook
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      summary: Update webhook
+      operationId: updateWebhook
+      tags: [webhooks]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/UpdateWebhookRequest' }
+      responses:
+        '200':
+          description: Updated webhook
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete webhook
+      operationId: deleteWebhook
+      tags: [webhooks]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /webhooks/{webhookId}/rotate-secret:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+    post:
+      summary: Rotate webhook secret
+      operationId: rotateSecret
+      tags: [webhooks]
+      responses:
+        '200':
+          description: New secret (visible only once)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      secret:
+                        type: string
+                        description: New secret, visible only once
+
+  /webhooks/{webhookId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+    post:
+      summary: Enable webhook
+      operationId: enableWebhook
+      tags: [webhooks]
+      responses:
+        '204': { description: Enabled }
+
+  /webhooks/{webhookId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+    post:
+      summary: Disable webhook
+      operationId: disableWebhook
+      tags: [webhooks]
+      responses:
+        '204': { description: Disabled }
+
+  /webhooks/{webhookId}/test:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+    post:
+      summary: Trigger a test delivery
+      operationId: triggerTestDelivery
+      tags: [webhooks]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_type:
+                  type: string
+                  default: webhook.test
+      responses:
+        '202':
+          description: Test delivery enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      delivery_id: { type: string, format: uuid }
+
+  /webhooks/{webhookId}/deliveries:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+      - in: query
+        name: status
+        schema: { type: string, enum: [pending, delivered, failed, dead] }
+      - in: query
+        name: event_type
+        schema: { type: string }
+      - in: query
+        name: limit
+        schema: { type: integer, default: 50, maximum: 200 }
+      - in: query
+        name: cursor
+        schema: { type: string }
+    get:
+      summary: List delivery attempts (audit log)
+      operationId: listDeliveries
+      tags: [deliveries]
+      responses:
+        '200':
+          description: Delivery list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryList' }
+
+  /webhooks/{webhookId}/deliveries/{deliveryId}:
+    parameters:
+      - $ref: '#/components/parameters/webhookId'
+      - in: path
+        name: deliveryId
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get delivery details
+      operationId: getDelivery
+      tags: [deliveries]
+      responses:
+        '200':
+          description: Delivery
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    projectId:
+      in: path
+      name: projectId
+      required: true
+      schema: { type: string, format: uuid }
+    webhookId:
+      in: path
+      name: webhookId
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Webhook:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        target_url: { type: string, format: uri }
+        description: { type: string }
+        event_filter:
+          type: array
+          items: { type: string }
+          description: Event types this webhook subscribes to (empty = all).
+        active: { type: boolean }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    WebhookResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Webhook' }
+
+    WebhookList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Webhook' }
+
+    WebhookCreatedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/Webhook'
+            - type: object
+              properties:
+                secret:
+                  type: string
+                  description: HMAC signing secret, visible only once.
+
+    CreateWebhookRequest:
+      type: object
+      required: [target_url]
+      properties:
+        target_url: { type: string, format: uri }
+        description: { type: string }
+        event_filter:
+          type: array
+          items: { type: string }
+
+    UpdateWebhookRequest:
+      type: object
+      description: Merge-patch; only provided fields are changed.
+      properties:
+        target_url: { type: string, format: uri }
+        description: { type: string }
+        event_filter:
+          type: array
+          items: { type: string }
+        active: { type: boolean }
+
+    Delivery:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        webhook_id: { type: string, format: uuid }
+        event_id: { type: string }
+        event_type: { type: string }
+        status: { type: string, enum: [pending, delivered, failed, dead] }
+        attempt_count: { type: integer }
+        next_attempt_at: { type: string, format: date-time }
+        last_response_status: { type: integer }
+        last_response_body: { type: string }
+        last_error: { type: string }
+        last_attempted_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
+        failed_permanently_at: { type: string, format: date-time }
+        duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    DeliveryResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Delivery' }
+
+    DeliveryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Delivery' }
+        pagination:
+          type: object
+          properties:
+            next_cursor: { type: string, nullable: true }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        trace_id: { type: string }

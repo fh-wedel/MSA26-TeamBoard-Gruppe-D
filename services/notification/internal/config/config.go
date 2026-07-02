@@ -17,8 +17,9 @@ type Config struct {
 	ProjectServiceURL  string `env:"PROJECT_SERVICE_URL,required"`
 	ServiceTokenSecret string `env:"SERVICE_TOKEN_SECRET,required"`
 
-	JWKSUrl  string `env:"JWT_JWKS_URL,required"`
-	JWTIssuer string `env:"JWT_ISSUER,required"`
+	JWKSUrl     string `env:"JWT_JWKS_URL,required"`
+	JWTIssuer   string `env:"JWT_ISSUER,required"`
+	JWTAudience string `env:"JWT_AUDIENCE" envDefault:"teamboard-api"`
 
 	NotificationRetentionDays int `env:"NOTIFICATION_RETENTION_DAYS" envDefault:"90"`
 }

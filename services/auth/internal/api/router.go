@@ -40,6 +40,9 @@ func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Poo
 	// JWKS
 	r.Get("/.well-known/jwks.json", h.JWKS)
 
+	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
+	mountDocs(r)
+
 	// Auth endpoints
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Post("/register", h.Register)

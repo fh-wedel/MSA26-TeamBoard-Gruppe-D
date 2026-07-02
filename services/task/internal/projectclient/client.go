@@ -2,9 +2,6 @@ package projectclient
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sony/gobreaker"
 	"github.com/teamboard/services/task/internal/domain"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 const cacheTTL = 30 * time.Second
@@ -28,16 +26,12 @@ type cacheEntry struct {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	token      string // pre-computed service token
+	issuer     servicetoken.Issuer
 	breaker    *gobreaker.CircuitBreaker
 	cache      sync.Map
 }
 
-func New(baseURL, serviceTokenSecret string) *Client {
-	mac := hmac.New(sha256.New, []byte(serviceTokenSecret))
-	mac.Write([]byte("internal"))
-	token := hex.EncodeToString(mac.Sum(nil))
-
+func New(baseURL string, issuer servicetoken.Issuer) *Client {
 	settings := gobreaker.Settings{
 		Name:        "project-service",
 		MaxRequests: 1,
@@ -50,7 +44,7 @@ func New(baseURL, serviceTokenSecret string) *Client {
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 200 * time.Millisecond},
-		token:      token,
+		issuer:     issuer,
 		breaker:    gobreaker.NewCircuitBreaker(settings),
 	}
 }
@@ -88,7 +82,11 @@ func (c *Client) fetch(ctx context.Context, projectID, userID uuid.UUID) (*domai
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	tok, err := c.issuer.Issue(ctx, "task-service", "internal")
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

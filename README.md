@@ -37,6 +37,8 @@ Nach `make up` erreichbar:
 |-----|-----|--------|
 | Frontend | http://localhost:3000 | alice@teamboard.local / `AliceSecret123!` |
 | API (über Gateway) | http://localhost | JWT vom Auth-Service |
+| API-Doku Plugin/Webhook | http://localhost/plugin/docs | — (Swagger UI) |
+| API-Doku Board Registry | http://localhost/board-registry/docs | — (Swagger UI) |
 | Traefik Dashboard | http://localhost:8080 | — |
 | RabbitMQ UI | http://localhost:15672 | teamboard / teamboard |
 | MinIO Console | http://localhost:9001 | teamboard / teamboard-secret |

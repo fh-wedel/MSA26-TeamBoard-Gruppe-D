@@ -1,0 +1,320 @@
+openapi: 3.1.0
+info:
+  title: TeamBoard Document Service
+  version: 1.0.0
+  description: >
+    Document metadata with S3/MinIO-backed storage. Uploads and new versions
+    are performed against pre-signed URLs: the client initiates an upload,
+    PUTs the bytes directly to object storage, then confirms. All endpoints
+    require a bearer JWT issued by the Auth service.
+servers:
+  - url: http://localhost/api/v1
+    description: Via Traefik gateway
+  - url: http://localhost:8004/api/v1
+    description: Direct service port (when published)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: documents
+    description: Document metadata and lifecycle
+  - name: versions
+    description: Version upload lifecycle and history
+
+paths:
+  /documents:
+    get:
+      summary: List documents in a project
+      operationId: listDocuments
+      tags: [documents]
+      parameters:
+        - { in: query, name: project_id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: limit, schema: { type: integer, default: 50, maximum: 200 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        '200':
+          description: Document list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentList' }
+        '400': { $ref: '#/components/responses/Problem' }
+    post:
+      summary: Initiate a document upload
+      operationId: initiateUpload
+      tags: [documents]
+      description: >
+        Creates the document metadata and its first (pending) version and
+        returns a pre-signed URL to PUT the bytes to. Call the confirm endpoint
+        after the upload completes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InitiateUploadRequest' }
+      responses:
+        '201':
+          description: Upload initiated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadInitiationResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /documents/{documentID}:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+    get:
+      summary: Get document metadata
+      operationId: getDocument
+      tags: [documents]
+      responses:
+        '200':
+          description: Document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      summary: Rename a document
+      operationId: renameDocument
+      tags: [documents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RenameDocumentRequest' }
+      responses:
+        '200':
+          description: Updated document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete a document
+      operationId: deleteDocument
+      tags: [documents]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /documents/{documentID}/download:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+      - { in: query, name: version, schema: { type: integer }, description: Version number; defaults to the current version. }
+    get:
+      summary: Get a pre-signed download URL
+      operationId: getDownloadURL
+      tags: [documents]
+      responses:
+        '200':
+          description: Download info with pre-signed URL
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DownloadInfoResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /documents/{documentID}/versions:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+    get:
+      summary: List versions of a document
+      operationId: listVersions
+      tags: [versions]
+      responses:
+        '200':
+          description: Version list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionList' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      summary: Initiate a new version upload
+      operationId: initiateNewVersion
+      tags: [versions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InitiateNewVersionRequest' }
+      responses:
+        '201':
+          description: Upload initiated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadInitiationResponse' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /documents/{documentID}/versions/{version}:confirm:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+      - $ref: '#/components/parameters/version'
+    post:
+      summary: Confirm an uploaded version
+      operationId: confirmUpload
+      tags: [versions]
+      description: Marks the pending version as uploaded and promotes it to current.
+      responses:
+        '200':
+          description: Updated document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /documents/{documentID}/versions/{version}:restore:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+      - $ref: '#/components/parameters/version'
+    post:
+      summary: Restore an older version as current
+      operationId: restoreVersion
+      tags: [versions]
+      responses:
+        '200':
+          description: Updated document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    documentID:
+      in: path
+      name: documentID
+      required: true
+      schema: { type: string, format: uuid }
+    version:
+      in: path
+      name: version
+      required: true
+      schema: { type: integer }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Document:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string }
+        content_type: { type: string }
+        current_version: { type: integer, nullable: true }
+        status: { type: string, enum: [pending, active, deleted] }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DocumentResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Document' }
+
+    DocumentList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Document' }
+        pagination:
+          type: object
+          properties:
+            next_cursor: { type: string, nullable: true }
+
+    Version:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        version_number: { type: integer }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        status: { type: string, enum: [pending, uploaded] }
+        uploaded_by: { type: string, format: uuid }
+        uploaded_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    VersionList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Version' }
+
+    UploadInitiation:
+      type: object
+      properties:
+        document: { $ref: '#/components/schemas/Document' }
+        version: { $ref: '#/components/schemas/Version' }
+        upload_url: { type: string, format: uri, description: Pre-signed PUT URL for the object bytes }
+        expires_at: { type: string, format: date-time }
+
+    UploadInitiationResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/UploadInitiation' }
+
+    DownloadInfo:
+      type: object
+      properties:
+        document: { $ref: '#/components/schemas/Document' }
+        version: { $ref: '#/components/schemas/Version' }
+        download_url: { type: string, format: uri, description: Pre-signed GET URL }
+        expires_at: { type: string, format: date-time }
+
+    DownloadInfoResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/DownloadInfo' }
+
+    InitiateUploadRequest:
+      type: object
+      required: [project_id, name, content_type, size_bytes]
+      properties:
+        project_id: { type: string, format: uuid }
+        name: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+
+    InitiateNewVersionRequest:
+      type: object
+      required: [content_type, size_bytes]
+      properties:
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+
+    RenameDocumentRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        trace_id: { type: string }

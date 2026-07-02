@@ -42,6 +42,11 @@ func MapErrorToHTTPStatus(err error) int {
 		return http.StatusNotFound
 	case code == "permission_denied":
 		return http.StatusForbidden
+	// Auth-credential codes must be checked before the broad "invalid_" prefix
+	// below, otherwise invalid_credentials would be mis-mapped to 400.
+	case code == "unauthorized", code == "token_invalid",
+		code == "token_revoked", code == "invalid_credentials":
+		return http.StatusUnauthorized
 	case code == "validation_failed", code == "password_too_weak",
 		code == "invalid_url", strings.HasPrefix(code, "invalid_"):
 		return http.StatusBadRequest
@@ -50,9 +55,6 @@ func MapErrorToHTTPStatus(err error) int {
 		return http.StatusConflict
 	case code == "rate_limited":
 		return http.StatusTooManyRequests
-	case code == "unauthorized", code == "token_invalid",
-		code == "token_revoked", code == "invalid_credentials":
-		return http.StatusUnauthorized
 	default:
 		return http.StatusInternalServerError
 	}

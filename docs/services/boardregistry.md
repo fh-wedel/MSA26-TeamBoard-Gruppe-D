@@ -86,7 +86,8 @@ Leere/unbekannte `view` → Frontend fällt auf das Spalten-Board zurück (mit H
 
 ## 3. API
 
-Alle Routen unter `/api/v1`. Öffentliche Routen: JWT (strukturelle Prüfung, wie Project-Service).
+Alle Routen unter `/api/v1`. Öffentliche Routen: RS256-JWT, gegen die JWKS des Auth-Service
+signaturgeprüft (`shared/go/authmiddleware`, `iss`/`aud`/`exp` erzwungen) — wie alle Services.
 
 | Methode | Pfad | Auth | Zweck |
 |---------|------|------|-------|
@@ -105,8 +106,9 @@ Erfolgsantworten: `{ "data": ... }`. Fehler: RFC-7807-ähnliche Problem-Details 
 (`validation_failed` 400, `board_type_not_found` 404, `board_type_exists` 409,
 `builtin_immutable` 403).
 
-Service-Token = `HMAC-SHA256("internal", SERVICE_TOKEN_SECRET)` (gleiche Variante wie
-Project↔Plugin/Task/Document).
+Service-Token = kurzlebiges HS256-JWT aus `shared/go/servicetoken` (`aud:"internal"`, 60s TTL,
+signiert mit `SERVICE_TOKEN_SECRET`), verifiziert über `servicetoken.RequireServiceToken` —
+gleiche Variante wie Project↔Plugin/Task/Document.
 
 ---
 

@@ -11,10 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/teamboard/services/boardregistry/internal/domain"
+	"github.com/teamboard/shared/go/authmiddleware"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 // NewRouter wires the HTTP routes for the board-registry service.
-func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, serviceTokenSecret string) http.Handler {
+func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier) http.Handler {
 	h := &handlers{svc: svc}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -24,11 +26,14 @@ func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, serviceTokenSecr
 	r.Get("/healthz/live", liveness)
 	r.Get("/healthz/ready", readiness(pool))
 
+	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
+	mountDocs(r)
+
 	// Public catalog (read) + developer registration (write), authenticated via JWT.
 	// NOTE: write endpoints are currently open to any authenticated user. Restricting
 	// registration to an admin/publisher role is tracked as follow-up work.
 	r.Group(func(r chi.Router) {
-		r.Use(jwtMiddleware)
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
 		r.Route("/api/v1/board-types", func(r chi.Router) {
 			r.Get("/", h.list)
 			r.Post("/", h.register)
@@ -40,9 +45,9 @@ func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, serviceTokenSecr
 		})
 	})
 
-	// Internal catalog consumed by the project service (service token).
+	// Internal catalog consumed by the project service (short-lived service token).
 	r.Group(func(r chi.Router) {
-		r.Use(serviceTokenMiddleware(serviceTokenSecret))
+		r.Use(servicetoken.RequireServiceToken(stVerifier))
 		r.Get("/api/v1/internal/board-types", h.list)
 		r.Get("/api/v1/internal/board-types/{type}", h.get)
 	})

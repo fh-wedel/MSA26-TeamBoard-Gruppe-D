@@ -14,6 +14,12 @@ type Config struct {
 	ProjectServiceURL  string `env:"PROJECT_SERVICE_URL,required"`
 	ServiceTokenSecret string `env:"SERVICE_TOKEN_SECRET,required"`
 
+	// User-JWT validation (RS256 against the auth service's JWKS).
+	// Defaults match the auth service's deployed JWT_ISSUER/JWT_AUDIENCE.
+	JWKSURL     string `env:"JWT_JWKS_URL,required"`
+	JWTIssuer   string `env:"JWT_ISSUER"   envDefault:"https://auth.teamboard.local"`
+	JWTAudience string `env:"JWT_AUDIENCE" envDefault:"teamboard-api"`
+
 	// S3/MinIO
 	S3Bucket           string `env:"S3_BUCKET" envDefault:"teamboard-documents"`
 	S3Region           string `env:"S3_REGION" envDefault:"us-east-1"`

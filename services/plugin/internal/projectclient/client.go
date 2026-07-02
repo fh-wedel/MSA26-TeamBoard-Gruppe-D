@@ -2,9 +2,6 @@ package projectclient
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 type permCacheEntry struct {
@@ -22,19 +20,16 @@ type permCacheEntry struct {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	svcToken   string
+	issuer     servicetoken.Issuer
 	cacheTTL   time.Duration
 	cache      sync.Map // key: "projectID:userID"
 }
 
-func New(baseURL, serviceTokenSecret string, timeout, cacheTTL time.Duration) *Client {
-	mac := hmac.New(sha256.New, []byte(serviceTokenSecret))
-	mac.Write([]byte("internal"))
-	computedToken := hex.EncodeToString(mac.Sum(nil))
+func New(baseURL string, issuer servicetoken.Issuer, timeout, cacheTTL time.Duration) *Client {
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: timeout},
-		svcToken:   computedToken,
+		issuer:     issuer,
 		cacheTTL:   cacheTTL,
 	}
 }
@@ -67,7 +62,11 @@ func (c *Client) getPermissions(ctx context.Context, projectID, userID uuid.UUID
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.svcToken)
+	tok, err := c.issuer.Issue(ctx, "plugin-service", "internal")
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

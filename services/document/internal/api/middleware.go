@@ -2,54 +2,32 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/teamboard/shared/go/authmiddleware"
 )
 
 type contextKey string
 
 const ctxUserID contextKey = "userID"
 
-// jwtMiddleware performs a structural (non-cryptographic) parse of the Bearer
-// token to extract the subject UUID. Full signature verification is performed
-// by the shared authmiddleware; this is a convenience extraction for handlers.
-func jwtMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
-			http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
-			return
-		}
-		token := strings.TrimPrefix(auth, "Bearer ")
-		parts := strings.Split(token, ".")
-		if len(parts) != 3 {
-			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-			return
-		}
-		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-		if err != nil {
-			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-			return
-		}
-		var claims struct {
-			Sub string `json:"sub"`
-		}
-		if err := json.Unmarshal(payload, &claims); err != nil || claims.Sub == "" {
-			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-			return
-		}
-		userID, err := uuid.Parse(claims.Sub)
-		if err != nil {
-			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-			return
-		}
-		ctx := context.WithValue(r.Context(), ctxUserID, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// newJWTMiddleware validates the Bearer JWT against the auth service's JWKS
+// (RS256 signature + iss/aud/exp enforced) via the shared authmiddleware, then
+// mirrors the user ID into this service's local context key so handlers keep
+// reading it through mustUserID.
+func newJWTMiddleware(jwks authmiddleware.JWKSSource, issuer, audience string) func(http.Handler) http.Handler {
+	verify := authmiddleware.Middleware(jwks,
+		authmiddleware.WithIssuer(issuer),
+		authmiddleware.WithAudience(audience),
+	)
+	return func(next http.Handler) http.Handler {
+		return verify(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), ctxUserID, authmiddleware.MustUserID(r.Context()))
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}))
+	}
 }
 
 func mustUserID(r *http.Request) uuid.UUID {

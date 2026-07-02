@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: TeamBoard Board Registry Service
+  version: 1.0.0
+  description: >
+    Authoritative source for board-type definitions. Built-in types (kanban,
+    calendar) plus runtime-registered custom types (e.g. scrum, gantt). Each
+    type carries default columns (with semantic status), default config, a
+    JSON-schema for board config validation, and a declarative presentation spec.
+    Public endpoints require a bearer JWT issued by the Auth service; internal
+    endpoints require a short-lived service token.
+servers:
+  - url: http://localhost/api/v1
+    description: Via Traefik gateway
+  - url: http://localhost:8007/api/v1
+    description: Direct service port (when published)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: board-types
+    description: Public catalog (read) and developer registration (write)
+  - name: internal
+    description: Consumed by the Project service via service token
+
+paths:
+  /board-types:
+    get:
+      summary: List board types
+      operationId: listBoardTypes
+      tags: [board-types]
+      responses:
+        '200':
+          description: Board-type catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoardTypeList' }
+    post:
+      summary: Register a new board type
+      operationId: registerBoardType
+      tags: [board-types]
+      description: >
+        Write access is currently open to any authenticated user; restricting it
+        to an admin/publisher role is tracked as follow-up work (see ADR 0001).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterBoardTypeRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoardTypeResponse' }
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          description: A board type with this slug already exists (code=board_type_exists)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /board-types/{type}:
+    parameters:
+      - $ref: '#/components/parameters/type'
+    get:
+      summary: Get a board type
+      operationId: getBoardType
+      tags: [board-types]
+      responses:
+        '200':
+          description: Board type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoardTypeResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      summary: Update a board type (built-in types are immutable)
+      operationId: updateBoardType
+      tags: [board-types]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/UpdateBoardTypeRequest' }
+      responses:
+        '200':
+          description: Updated board type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoardTypeResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403':
+          description: Built-in types cannot be modified (code=builtin_immutable)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete a board type (built-in types cannot be deleted)
+      operationId: deleteBoardType
+      tags: [board-types]
+      responses:
+        '204': { description: Deleted }
+        '403':
+          description: Built-in types cannot be deleted (code=builtin_immutable)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /internal/board-types:
+    get:
+      summary: List board types (internal)
+      operationId: listBoardTypesInternal
+      tags: [internal]
+      description: Consumed by the Project service. Requires a service token (aud=internal).
+      security:
+        - serviceToken: []
+      responses:
+        '200':
+          description: Board-type catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoardTypeList' }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /internal/board-types/{type}:
+    parameters:
+      - $ref: '#/components/parameters/type'
+    get:
+      summary: Get a board type (internal)
+      operationId: getBoardTypeInternal
+      tags: [internal]
+      security:
+        - serviceToken: []
+      responses:
+        '200':
+          description: Board type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoardTypeResponse' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived HS256 service token (aud=internal, 60s TTL).
+
+  parameters:
+    type:
+      in: path
+      name: type
+      required: true
+      description: Board-type slug, matching ^[a-z][a-z0-9_-]{0,49}$
+      schema: { type: string, pattern: '^[a-z][a-z0-9_-]{0,49}$' }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    ColumnDef:
+      type: object
+      required: [name, position, status]
+      properties:
+        name: { type: string }
+        position: { type: integer }
+        wip_limit: { type: integer, minimum: 0 }
+        status:
+          type: string
+          enum: [open, in_progress, blocked, done, archived]
+          description: Semantic status flowing into the Task service.
+
+    BoardType:
+      type: object
+      properties:
+        type: { type: string }
+        display_name: { type: string }
+        icon: { type: string }
+        default_columns:
+          type: array
+          items: { $ref: '#/components/schemas/ColumnDef' }
+        default_config:
+          type: object
+          additionalProperties: true
+          description: >
+            Type-specific default configuration. Free-form — the shape depends
+            on the board type (there is no single fixed schema across types).
+          example:
+            wip_default: 5
+            sprint_length_days: 14
+        config_schema:
+          type: object
+          additionalProperties: true
+          description: >
+            A JSON Schema (author-defined) used to validate a board's config
+            against this type. Free-form because it is itself a schema.
+          example:
+            type: object
+            properties:
+              sprint_length_days: { type: integer, minimum: 1 }
+        presentation:
+          $ref: '#/components/schemas/Presentation'
+        built_in: { type: boolean }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    BoardTypeResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/BoardType' }
+
+    BoardTypeList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/BoardType' }
+
+    RegisterBoardTypeRequest:
+      type: object
+      required: [type, display_name, default_columns]
+      properties:
+        type: { type: string, pattern: '^[a-z][a-z0-9_-]{0,49}$' }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        icon: { type: string }
+        default_columns:
+          type: array
+          items: { $ref: '#/components/schemas/ColumnDef' }
+        default_config:
+          type: object
+          additionalProperties: true
+          description: Type-specific default configuration (free-form).
+        config_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema used to validate a board's config against this type.
+        presentation:
+          $ref: '#/components/schemas/Presentation'
+
+    UpdateBoardTypeRequest:
+      type: object
+      description: Merge-patch; only provided fields are changed.
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        icon: { type: string }
+        default_columns:
+          type: array
+          items: { $ref: '#/components/schemas/ColumnDef' }
+        default_config:
+          type: object
+          additionalProperties: true
+          description: Type-specific default configuration (free-form).
+        config_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema used to validate a board's config against this type.
+        presentation:
+          $ref: '#/components/schemas/Presentation'
+
+    Presentation:
+      type: object
+      description: >
+        Declarative rendering spec, validated host-side against a meta-schema.
+        Empty/omitted means the default column-board renderer. See ADR 0002.
+      properties:
+        view:
+          type: string
+          enum: [board, calendar, timeline]
+          default: board
+          description: Built-in frontend renderer to use.
+        view_config:
+          type: object
+          description: >
+            Renderer-specific, declarative. Recognised keys depend on `view`:
+            board → group_by, show_wip, swimlane_by;
+            calendar → date_field, week_start, default_range;
+            timeline → start_field, end_field, group_by, color_by.
+            A key not valid for the chosen view is rejected.
+          properties:
+            group_by: { type: string, description: 'board/timeline (e.g. column|assignee|priority)' }
+            show_wip: { type: boolean, description: 'board' }
+            swimlane_by: { type: string, description: 'board' }
+            date_field: { type: string, description: 'calendar' }
+            week_start: { type: string, enum: [monday, sunday], description: 'calendar' }
+            default_range: { type: string, enum: [month, week], description: 'calendar' }
+            start_field: { type: string, description: 'timeline' }
+            end_field: { type: string, description: 'timeline' }
+            color_by: { type: string, enum: [priority, status, label], description: 'timeline' }
+        card:
+          type: object
+          description: View-independent task-card rendering.
+          properties:
+            fields:
+              type: array
+              items: { type: string }
+              description: 'e.g. priority, due_date, labels, comment_count, attachment_count'
+            color_by:
+              type: string
+              enum: [priority, status, label]
+      example:
+        view: timeline
+        view_config:
+          start_field: start_date
+          end_field: due_date
+          group_by: assignee
+          color_by: priority
+        card:
+          fields: [priority, due_date, labels]
+          color_by: priority
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        trace_id: { type: string }

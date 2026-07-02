@@ -5,9 +5,6 @@ package boardtypeclient
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +12,7 @@ import (
 	"time"
 
 	"github.com/teamboard/services/project/internal/domain"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 type cacheEntry struct {
@@ -26,23 +24,20 @@ type cacheEntry struct {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	svcToken   string
+	issuer     servicetoken.Issuer
 	cacheTTL   time.Duration
 
 	mu    sync.RWMutex
 	cache map[string]cacheEntry
 }
 
-// New builds a client. serviceTokenSecret is shared with the registry; the token
-// is the HMAC-SHA256 of "internal" (same scheme as plugin/projectclient).
-func New(baseURL, serviceTokenSecret string, timeout, cacheTTL time.Duration) *Client {
-	mac := hmac.New(sha256.New, []byte(serviceTokenSecret))
-	mac.Write([]byte("internal"))
-	token := hex.EncodeToString(mac.Sum(nil))
+// New builds a client. issuer mints short-lived service tokens (aud "internal")
+// for the registry's internal API, signed with the shared service-token secret.
+func New(baseURL string, issuer servicetoken.Issuer, timeout, cacheTTL time.Duration) *Client {
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: timeout},
-		svcToken:   token,
+		issuer:     issuer,
 		cacheTTL:   cacheTTL,
 		cache:      make(map[string]cacheEntry),
 	}
@@ -79,7 +74,11 @@ func (c *Client) GetType(ctx context.Context, typeID string) (*domain.BoardTypeD
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.svcToken)
+	tok, err := c.issuer.Issue(ctx, "project-service", "internal")
+	if err != nil {
+		return nil, domain.ErrBoardTypeRegistryUnavailable
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

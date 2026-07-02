@@ -1,0 +1,481 @@
+openapi: 3.1.0
+info:
+  title: TeamBoard Task Service
+  version: 1.0.0
+  description: >
+    Tasks, comments, attachment references, status transitions and change
+    history. Tasks live on a board and move between columns; each column
+    carries a semantic status that the task adopts on move. All endpoints
+    require a bearer JWT issued by the Auth service.
+servers:
+  - url: http://localhost/api/v1
+    description: Via Traefik gateway
+  - url: http://localhost:8003/api/v1
+    description: Direct service port (when published)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: tasks
+    description: Task CRUD, movement and assignment
+  - name: comments
+    description: Task comments
+  - name: attachments
+    description: Document attachment references
+  - name: history
+    description: Task change history
+
+paths:
+  /boards/{boardID}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/boardID'
+    get:
+      summary: List tasks on a board
+      operationId: listTasks
+      tags: [tasks]
+      parameters:
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/Status' } }
+        - { in: query, name: assignee_id, schema: { type: string, format: uuid } }
+        - { in: query, name: column_id, schema: { type: string, format: uuid } }
+        - { in: query, name: label, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 50, maximum: 200 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskList' }
+    post:
+      summary: Create a task on a board
+      operationId: createTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTaskRequest' }
+      responses:
+        '201':
+          description: Created task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+    get:
+      summary: Get a task
+      operationId: getTask
+      tags: [tasks]
+      responses:
+        '200':
+          description: Task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      summary: Update a task
+      operationId: updateTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTaskRequest' }
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete a task
+      operationId: deleteTask
+      tags: [tasks]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/move:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+    post:
+      summary: Move a task to another column / position
+      operationId: moveTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveTaskRequest' }
+      responses:
+        '200':
+          description: Moved task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/assign:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+    post:
+      summary: Assign or unassign a task
+      operationId: assignTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignTaskRequest' }
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/comments:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+    get:
+      summary: List comments on a task
+      operationId: listComments
+      tags: [comments]
+      responses:
+        '200':
+          description: Comment list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentList' }
+    post:
+      summary: Add a comment
+      operationId: createComment
+      tags: [comments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentRequest' }
+      responses:
+        '201':
+          description: Created comment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/comments/{commentID}:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+      - { in: path, name: commentID, required: true, schema: { type: string, format: uuid } }
+    patch:
+      summary: Edit a comment
+      operationId: updateComment
+      tags: [comments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentRequest' }
+      responses:
+        '200':
+          description: Updated comment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentResponse' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      summary: Delete a comment
+      operationId: deleteComment
+      tags: [comments]
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/attachments:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+    get:
+      summary: List attachment references on a task
+      operationId: listAttachments
+      tags: [attachments]
+      responses:
+        '200':
+          description: Attachment list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentList' }
+    post:
+      summary: Attach a document to a task
+      operationId: addAttachment
+      tags: [attachments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddAttachmentRequest' }
+      responses:
+        '201':
+          description: Attachment added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentResponse' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/attachments/{attachmentID}:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+      - { in: path, name: attachmentID, required: true, schema: { type: string, format: uuid } }
+    delete:
+      summary: Remove an attachment reference
+      operationId: removeAttachment
+      tags: [attachments]
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /tasks/{taskID}/history:
+    parameters:
+      - $ref: '#/components/parameters/taskID'
+    get:
+      summary: Get a task's change history
+      operationId: getTaskHistory
+      tags: [history]
+      responses:
+        '200':
+          description: History entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HistoryList' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    boardID:
+      in: path
+      name: boardID
+      required: true
+      schema: { type: string, format: uuid }
+    taskID:
+      in: path
+      name: taskID
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Status:
+      type: string
+      enum: [open, in_progress, blocked, done, archived]
+
+    Priority:
+      type: string
+      enum: [low, medium, high, urgent]
+
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        board_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        column_id: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/Status' }
+        priority: { $ref: '#/components/schemas/Priority' }
+        assignee_id: { type: string, format: uuid, nullable: true }
+        due_date: { type: string, format: date-time, nullable: true }
+        start_date: { type: string, format: date-time, nullable: true }
+        labels:
+          type: array
+          items: { type: string }
+        position: { type: string, description: Fractional ordering key }
+        created_by: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        comment_count: { type: integer }
+        attachment_count: { type: integer }
+
+    TaskResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Task' }
+
+    TaskList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Task' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    CreateTaskRequest:
+      type: object
+      required: [title]
+      properties:
+        column_id: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        description: { type: string }
+        priority: { $ref: '#/components/schemas/Priority' }
+        assignee_id: { type: string, format: uuid, nullable: true }
+        due_date: { type: string, format: date-time, nullable: true }
+        start_date: { type: string, format: date-time, nullable: true }
+        labels:
+          type: array
+          items: { type: string }
+
+    UpdateTaskRequest:
+      type: object
+      description: Only provided fields are changed.
+      properties:
+        title: { type: string }
+        description: { type: string }
+        priority: { $ref: '#/components/schemas/Priority' }
+        due_date: { type: string, format: date-time, nullable: true }
+        start_date: { type: string, format: date-time, nullable: true }
+        labels:
+          type: array
+          items: { type: string }
+
+    MoveTaskRequest:
+      type: object
+      required: [column_id]
+      description: >
+        Provide before_id and/or after_id to position the task relative to
+        siblings in the target column.
+      properties:
+        column_id: { type: string, format: uuid }
+        before_id: { type: string, format: uuid, nullable: true }
+        after_id: { type: string, format: uuid, nullable: true }
+
+    AssignTaskRequest:
+      type: object
+      description: Set assignee_id to null to unassign.
+      properties:
+        assignee_id: { type: string, format: uuid, nullable: true }
+
+    Comment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        body: { type: string }
+        mentions:
+          type: array
+          items: { type: string, format: uuid }
+        edited_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    CommentResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Comment' }
+
+    CommentList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Comment' }
+
+    CommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+
+    Attachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        added_by: { type: string, format: uuid }
+        added_at: { type: string, format: date-time }
+
+    AttachmentResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Attachment' }
+
+    AttachmentList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+
+    AddAttachmentRequest:
+      type: object
+      required: [document_id]
+      properties:
+        document_id: { type: string, format: uuid }
+
+    HistoryEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        change_type: { type: string }
+        diff:
+          type: object
+          additionalProperties: true
+        occurred_at: { type: string, format: date-time }
+
+    HistoryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/HistoryEntry' }
+
+    Pagination:
+      type: object
+      properties:
+        next_cursor: { type: string, nullable: true }
+        limit: { type: integer }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        trace_id: { type: string }

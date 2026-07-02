@@ -19,7 +19,7 @@ var upgrader = gorillaws.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true }, // CORS handled by Traefik
 }
 
-func handleWebSocket(pushSvc *push.Service, hub *ws.Hub) http.HandlerFunc {
+func handleWebSocket(pushSvc *push.Service, hub *ws.Hub, verifier *tokenVerifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Token is in query string for WebSocket (browsers can't set headers on WS upgrade).
 		token := r.URL.Query().Get("token")
@@ -27,7 +27,7 @@ func handleWebSocket(pushSvc *push.Service, hub *ws.Hub) http.HandlerFunc {
 			http.Error(w, "missing token", http.StatusUnauthorized)
 			return
 		}
-		userID, err := extractSubFromToken(token)
+		userID, err := verifier.verify(r.Context(), token)
 		if err != nil || userID == uuid.Nil {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return

@@ -20,8 +20,10 @@ import (
 	"github.com/teamboard/services/task/internal/events"
 	"github.com/teamboard/services/task/internal/projectclient"
 	"github.com/teamboard/services/task/internal/repository"
+	"github.com/teamboard/shared/go/authmiddleware"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -61,9 +63,13 @@ func main() {
 	}
 	defer rabbitConn.Close()
 
+	// Service-to-service token issuer (HS256, shared secret) + user-JWT source.
+	stIssuer := servicetoken.NewIssuer(cfg.ServiceTokenSecret)
+	jwks := authmiddleware.NewJWKSSource(cfg.JWKSURL)
+
 	// Clients
-	projClient := projectclient.New(cfg.ProjectServiceURL, cfg.ServiceTokenSecret)
-	docClient := documentclient.New(cfg.DocumentServiceURL, cfg.ServiceTokenSecret)
+	projClient := projectclient.New(cfg.ProjectServiceURL, stIssuer)
+	docClient := documentclient.New(cfg.DocumentServiceURL, stIssuer)
 
 	// Domain wiring
 	repo := repository.New(pool)
@@ -108,7 +114,7 @@ func main() {
 	}()
 
 	// HTTP server
-	router := api.NewRouter(svc)
+	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      router,

@@ -279,14 +279,19 @@ Das System besteht aus sieben Domain-Services (Auth, Project, Task, Document, No
 **Zweck:** Single Entry Point für alle Clients.
 
 **Verantwortet:**
-- TLS-Termination
-- JWT-Validierung gegen JWKS des Auth Service
+- TLS-Termination (in AWS; lokal HTTP)
 - Routing zu den Domain-Services
-- Rate Limiting pro IP / pro User
-- CORS
-- Request-Logging mit Trace-ID-Initiierung
+- Rate Limiting pro IP (Traefik `ratelimit`-Middleware)
+- CORS (Traefik `headers`-Middleware)
+- Security-Header (X-Frame-Options, X-Content-Type-Options, Referrer-/Permissions-Policy)
+- Request-Logging
 
 **Verantwortet NICHT:**
+- **JWT-Validierung** — bewusst **nicht** am Gateway, sondern in **jedem** Service
+  unabhängig (Zero-Trust: keine implizite Vertrauensstellung durch Netzwerklage).
+  Jeder Service prüft die RS256-Signatur selbst gegen die JWKS des Auth Service
+  via `shared/go/authmiddleware`. Interne Service-zu-Service-Calls tragen ein
+  separates, kurzlebiges `servicetoken`-JWT.
 - Geschäftslogik (Smart Endpoints, Dumb Pipes!)
 - Response-Aggregation
 
@@ -394,7 +399,7 @@ teamboard/
 ### Begründung Monorepo
 
 - **Atomare Änderungen** über Service-Grenzen hinweg (z. B. Event-Schema-Änderung)
-- **Geteilter Code** in `shared/go/` ohne Versions-Hölle
+- **Geteilter Code** in `shared/go/` 
 - **CI/CD** kann Service-spezifische Builds über Path-Filter triggern
 - **Onboarding:** ein `git clone`, ein `make up`, läuft
 
@@ -808,7 +813,12 @@ Mit Cache (Redis, TTL 30s) zur Lastreduktion. Cache wird bei `project.member.*` 
 
 ### 9.3 Service-to-Service-Authentifizierung
 
-Interne Endpunkte unter `/api/v1/internal/...` erwarten zusätzlich einen Service-Token (kurzer JWT mit `aud: "internal"`, signiert vom Auth Service). Verhindert, dass externe Clients interne Routes ansprechen können.
+Interne Endpunkte unter `/api/v1/internal/...` erwarten zusätzlich einen Service-Token:
+ein kurzlebiges HS256-JWT (`aud: "internal"`, 60 s TTL) aus `shared/go/servicetoken`. Der
+**aufrufende** Service stellt es pro Request mit dem geteilten `SERVICE_TOKEN_SECRET` aus
+(`servicetoken.Issuer`); der Empfänger verifiziert mit `servicetoken.RequireServiceToken`.
+Verhindert, dass externe Clients interne Routes ansprechen — diese Routen sind zudem in keiner
+Gateway-`rule` und daher am Edge gar nicht erreichbar (Defense-in-Depth).
 
 ---
 

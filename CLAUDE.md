@@ -191,3 +191,4 @@ replace github.com/teamboard/shared/go => ../../shared/go
 - `docs/specifications/orchestration.md` — full Docker Compose config, Makefile, and seed script
 - `docs/specifications/gateway.md` — Traefik routing rules, rate limiting, CORS config
 - `docs/services/*.md` — per-service detail: DB schema, OpenAPI spec, use-cases, test strategy
+- `docs/TODO.md` — **backlog of not-yet-implemented changes** (gateway/observability hardening, missing tests, authz follow-ups). Check here before assuming a documented feature is built; update it when closing an item.

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/teamboard/services/task/internal/domain"
+	"github.com/teamboard/shared/go/authmiddleware"
 )
 
 // Handlers holds the domain service used by all HTTP handlers.
@@ -16,7 +17,7 @@ type Handlers struct {
 }
 
 // NewRouter wires all routes and returns the root handler.
-func NewRouter(svc domain.TaskService) http.Handler {
+func NewRouter(svc domain.TaskService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string) http.Handler {
 	h := &Handlers{svc: svc}
 	r := chi.NewRouter()
 
@@ -27,8 +28,11 @@ func NewRouter(svc domain.TaskService) http.Handler {
 	r.Get("/healthz/live", h.Liveness)
 	r.Get("/healthz/ready", h.Readiness)
 
+	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
+	mountDocs(r)
+
 	r.Group(func(r chi.Router) {
-		r.Use(jwtMiddleware)
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
 
 		// Tasks via board
 		r.Route("/api/v1/boards/{boardID}/tasks", func(r chi.Router) {

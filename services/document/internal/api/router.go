@@ -8,9 +8,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/teamboard/services/document/internal/domain"
+	"github.com/teamboard/shared/go/authmiddleware"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
-func NewRouter(svc domain.DocumentService) http.Handler {
+func NewRouter(svc domain.DocumentService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
@@ -18,8 +20,12 @@ func NewRouter(svc domain.DocumentService) http.Handler {
 	r.Get("/healthz", handleLiveness)
 	r.Get("/readyz", handleReadiness)
 
+	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
+	mountDocs(r)
+
+	// User-facing routes (RS256 user JWT).
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(jwtMiddleware)
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
 
 		// Documents
 		r.Post("/documents", handleInitiateUpload(svc))
@@ -36,9 +42,12 @@ func NewRouter(svc domain.DocumentService) http.Handler {
 
 		// Download
 		r.Get("/documents/{documentID}/download", handleGetDownloadURL(svc))
+	})
 
-		// Internal (service-to-service)
-		r.Get("/internal/documents/{documentID}", handleGetDocumentInfo(svc))
+	// Internal service-to-service route (short-lived service token, aud "internal").
+	r.Group(func(r chi.Router) {
+		r.Use(servicetoken.RequireServiceToken(stVerifier))
+		r.Get("/api/v1/internal/documents/{documentID}", handleGetDocumentInfo(svc))
 	})
 
 	return r

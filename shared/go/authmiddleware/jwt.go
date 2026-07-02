@@ -78,6 +78,19 @@ func Middleware(jwks JWKSSource, opts ...Option) func(http.Handler) http.Handler
 	}
 }
 
+// VerifyToken validates a raw JWT string against the JWKS and returns its claims.
+// It enforces RS256 and expiry, plus issuer/audience when configured via opts
+// (WithIssuer/WithAudience/WithClockSkew). Use it for non-HTTP token paths such
+// as WebSocket upgrades where the token arrives in a query parameter rather than
+// an Authorization header.
+func VerifyToken(ctx context.Context, tokenStr string, jwks JWKSSource, opts ...Option) (jwt.MapClaims, error) {
+	cfg := &middlewareConfig{clockSkew: 30 * time.Second}
+	for _, o := range opts {
+		o(cfg)
+	}
+	return parseToken(ctx, tokenStr, jwks, cfg)
+}
+
 func extractBearer(h string) string {
 	const prefix = "Bearer "
 	if !strings.HasPrefix(h, prefix) {

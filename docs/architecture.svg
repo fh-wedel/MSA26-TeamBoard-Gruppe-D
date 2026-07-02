@@ -17,7 +17,7 @@
   <!-- ============ title ============ -->
   <text x="44" y="56" font-size="27" font-weight="700" fill="#0f172a">TeamBoard — Microservice Architecture</text>
   <text x="44" y="84" font-size="14" fill="#64748b">Go · Chi · sqlc · PostgreSQL 16 · Redis 7 · RabbitMQ 3.12 · Traefik   ·   async via teamboard.events (Outbox + Envelope)</text>
-  <text x="1396" y="56" font-size="12" fill="#94a3b8" text-anchor="end">current · 2026-06-28</text>
+  <text x="1396" y="56" font-size="12" fill="#94a3b8" text-anchor="end">current · 2026-06-30</text>
 
   <!-- ============ layer hints (right edge) ============ -->
   <text x="1396" y="150" font-size="11" fill="#cbd5e1" text-anchor="end" font-weight="600" letter-spacing="1">CLIENT</text>
@@ -42,8 +42,8 @@
   </g>
 
   <!-- ============ event bus bar (covers gray middles) ============ -->
-  <rect x="200" y="500" width="1040" height="74" rx="16" fill="#fff4ea" stroke="#f4a259" stroke-width="1.5" filter="url(#shadow)"/>
-  <rect x="200" y="500" width="1040" height="6" rx="3" fill="#ea7317"/>
+  <rect x="100" y="500" width="1240" height="74" rx="16" fill="#fff4ea" stroke="#f4a259" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="100" y="500" width="1240" height="6" rx="3" fill="#ea7317"/>
 
   <!-- async event connectors (orange) -->
   <g stroke="#ea7317" fill="none" stroke-width="2.6">
@@ -104,7 +104,7 @@
   <text x="446" y="262" font-size="15.5" font-weight="700" fill="#1e293b">Traefik API Gateway</text>
   <rect x="956" y="246" width="44" height="22" rx="11" fill="#e0f2fe"/>
   <text x="978" y="261" font-size="12" font-weight="700" fill="#0369a1" text-anchor="middle">:80</text>
-  <text x="446" y="284" font-size="11.5" fill="#64748b">JWT validation · CORS · rate limiting · trace-id injection · routing</text>
+  <text x="446" y="284" font-size="11.5" fill="#64748b">CORS · rate limiting · security headers · routing  (JWT validated per-service, not here)</text>
 
   <!-- ============ Domain services row ============ -->
   <!-- helper: card x=37.. width 176, top y=330 height 124 -->
@@ -203,7 +203,7 @@
     <path d="M64,1054 L120,1054" stroke="#94a3b8" stroke-dasharray="2 4" marker-end="url(#ah-gray)"/>
   </g>
   <text x="134" y="930" font-size="12" fill="#334155">Client edge — HTTPS request / WebSocket push</text>
-  <text x="134" y="962" font-size="12" fill="#334155">Gateway routing — JWT validate · trace-id inject</text>
+  <text x="134" y="962" font-size="12" fill="#334155">Gateway routing — CORS · rate-limit · security headers (no JWT here)</text>
   <text x="134" y="994" font-size="12" fill="#334155">Synchronous internal API — service-token, cached</text>
   <text x="134" y="1026" font-size="12" fill="#334155">Async domain event — Outbox → RabbitMQ → consumer (double head = pub + sub)</text>
   <text x="134" y="1058" font-size="12" fill="#334155">Persistence — DB · cache · object store</text>

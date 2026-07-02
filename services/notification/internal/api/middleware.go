@@ -2,26 +2,61 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/teamboard/shared/go/authmiddleware"
 )
 
 type contextKey string
 
 const ctxUserID contextKey = "userID"
 
-func jwtMiddleware(next http.Handler) http.Handler {
+// tokenVerifier holds everything needed to validate a user JWT (RS256 against
+// the auth service's JWKS, with iss/aud/exp enforced). It is shared by the HTTP
+// middleware and the WebSocket upgrade path (which carries the token in a query
+// parameter instead of a header).
+type tokenVerifier struct {
+	jwks     authmiddleware.JWKSSource
+	issuer   string
+	audience string
+}
+
+func newTokenVerifier(jwks authmiddleware.JWKSSource, issuer, audience string) *tokenVerifier {
+	return &tokenVerifier{jwks: jwks, issuer: issuer, audience: audience}
+}
+
+// verify validates a raw token string and returns the authenticated user ID.
+func (v *tokenVerifier) verify(ctx context.Context, token string) (uuid.UUID, error) {
+	claims, err := authmiddleware.VerifyToken(ctx, token, v.jwks,
+		authmiddleware.WithIssuer(v.issuer),
+		authmiddleware.WithAudience(v.audience),
+	)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	sub, err := claims.GetSubject()
+	if err != nil || sub == "" {
+		return uuid.Nil, ErrBadToken
+	}
+	id, err := uuid.Parse(sub)
+	if err != nil {
+		return uuid.Nil, ErrBadToken
+	}
+	return id, nil
+}
+
+// middleware validates the Authorization: Bearer header and injects the user ID.
+func (v *tokenVerifier) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "Bearer "
 		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
+		if len(auth) <= len(prefix) {
 			http.Error(w, `{"error":"missing token"}`, http.StatusUnauthorized)
 			return
 		}
-		userID, err := extractSubFromToken(strings.TrimPrefix(auth, "Bearer "))
+		userID, err := v.verify(r.Context(), auth[len(prefix):])
 		if err != nil {
 			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 			return
@@ -33,28 +68,6 @@ func jwtMiddleware(next http.Handler) http.Handler {
 
 func mustUserID(r *http.Request) uuid.UUID {
 	return r.Context().Value(ctxUserID).(uuid.UUID)
-}
-
-func extractSubFromToken(token string) (uuid.UUID, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return uuid.Nil, ErrBadToken
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return uuid.Nil, ErrBadToken
-	}
-	var claims struct {
-		Sub string `json:"sub"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil || claims.Sub == "" {
-		return uuid.Nil, ErrBadToken
-	}
-	id, err := uuid.Parse(claims.Sub)
-	if err != nil {
-		return uuid.Nil, ErrBadToken
-	}
-	return id, nil
 }
 
 type errBadToken struct{}

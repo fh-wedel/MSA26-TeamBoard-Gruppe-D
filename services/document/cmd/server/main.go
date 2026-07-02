@@ -21,8 +21,10 @@ import (
 	"github.com/teamboard/services/document/internal/projectclient"
 	"github.com/teamboard/services/document/internal/repository"
 	"github.com/teamboard/services/document/internal/storage"
+	"github.com/teamboard/shared/go/authmiddleware"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -75,7 +77,11 @@ func main() {
 
 	// ── Repository, clients, service ──────────────────────────────────────────
 	repo := repository.New(pool)
-	projClient := projectclient.New(cfg.ProjectServiceURL, cfg.ServiceTokenSecret)
+	stIssuer := servicetoken.NewIssuer(cfg.ServiceTokenSecret)
+	stVerifier := servicetoken.NewVerifier(cfg.ServiceTokenSecret, "internal")
+	jwks := authmiddleware.NewJWKSSource(cfg.JWKSURL)
+
+	projClient := projectclient.New(cfg.ProjectServiceURL, stIssuer)
 	svc := domain.NewService(repo, store, projClient, cfg.AllowedContentTypes)
 
 	// ── Background workers ────────────────────────────────────────────────────
@@ -120,7 +126,7 @@ func main() {
 	go cleanupWorker.Run(ctx)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
-	router := api.NewRouter(svc)
+	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,

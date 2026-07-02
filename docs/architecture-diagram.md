@@ -5,7 +5,7 @@ graph TB
     Browser(["🌐 Browser · React SPA"])
 
     subgraph GW["Traefik Gateway · :80"]
-        T["Rate Limiting · CORS · Trace-ID Injection"]
+        T["Rate Limiting · CORS · Security Headers · Routing"]
     end
 
     subgraph SVC["Microservices"]
@@ -27,9 +27,9 @@ graph TB
 
     Browser -- "HTTPS" --> GW
     Browser <-- "WebSocket" --> Notification
-    GW -- "JWT + Trace-ID" --> Auth & Project & Task & Document & Notification & Plugin & BoardRegistry
+    GW -- "routes (JWT validated per-service)" --> Auth & Project & Task & Document & Notification & Plugin & BoardRegistry
 
-    Task & Document & Notification & Plugin -- "GET /internal/permissions" --> Project
+    Task & Document & Notification & Plugin -- "GET /internal/permissions (service token)" --> Project
     Project -- "GET /internal/board-types (cached)" --> BoardRegistry
 
     Auth & Project & Task & Document & Notification & Plugin & BoardRegistry -- "SQL + Outbox" --> PG

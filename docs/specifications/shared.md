@@ -118,6 +118,11 @@ import (
 // the JWKS endpoint and injects user info into the request context.
 func Middleware(jwks JWKSSource, opts ...Option) func(http.Handler) http.Handler
 
+// VerifyToken validates a raw JWT string (RS256 + exp, plus iss/aud when set via
+// opts) and returns its claims. For non-HTTP paths such as WebSocket upgrades
+// where the token arrives in a query parameter rather than a header.
+func VerifyToken(ctx context.Context, token string, jwks JWKSSource, opts ...Option) (jwt.MapClaims, error)
+
 // JWKSSource fetches and caches public keys for JWT validation.
 type JWKSSource interface {
     Key(ctx context.Context, kid string) (any, error)
@@ -914,29 +919,28 @@ import (
     "time"
 )
 
-// Issuer creates short-lived JWTs for service-to-service calls.
+// Issuer creates short-lived (60s) HS256 JWTs for service-to-service calls.
 type Issuer interface {
     Issue(ctx context.Context, callerService, audience string) (string, error)
 }
 
-func NewIssuer(secret string, opts ...IssuerOption) Issuer
+func NewIssuer(secret string) Issuer
 
-// Verifier validates incoming service tokens.
+// Verifier validates incoming service tokens. The accepted audience is fixed
+// at construction (e.g. "internal").
 type Verifier interface {
     Verify(ctx context.Context, token string) (*Claims, error)
 }
 
-func NewVerifier(secret string, opts ...VerifierOption) Verifier
+func NewVerifier(secret, audience string) Verifier
 
 type Claims struct {
     Service  string
     Audience string
-    IssuedAt time.Time
-    Expires  time.Time
 }
 
-// Middleware for /internal/* routes
-func RequireServiceToken(verifier Verifier, audience string) func(http.Handler) http.Handler
+// Middleware for /internal/* routes. Audience is enforced by the Verifier.
+func RequireServiceToken(verifier Verifier) func(http.Handler) http.Handler
 ```
 
 ### 7.3 Verwendung — Caller (z. B. Task Service ruft Project Service)
@@ -952,10 +956,10 @@ req.Header.Set("Authorization", "Bearer "+token)
 ### 7.4 Verwendung — Empfänger (z. B. Project Service)
 
 ```go
-verifier := servicetoken.NewVerifier(cfg.Security.ServiceTokenSecret)
+verifier := servicetoken.NewVerifier(cfg.Security.ServiceTokenSecret, "internal")
 
 r.Group(func(r chi.Router) {
-    r.Use(servicetoken.RequireServiceToken(verifier, "internal"))
+    r.Use(servicetoken.RequireServiceToken(verifier))
     r.Get("/internal/projects/{id}/permissions/{userId}", h.getPermissions)
 })
 ```

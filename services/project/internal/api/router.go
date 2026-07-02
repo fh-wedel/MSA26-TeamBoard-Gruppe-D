@@ -8,13 +8,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/teamboard/services/project/internal/domain"
+	"github.com/teamboard/shared/go/authmiddleware"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 type Handlers struct {
 	svc domain.ProjectService
 }
 
-func NewRouter(svc domain.ProjectService, serviceTokenSecret string) http.Handler {
+func NewRouter(svc domain.ProjectService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier) http.Handler {
 	h := &Handlers{svc: svc}
 	r := chi.NewRouter()
 
@@ -26,9 +28,12 @@ func NewRouter(svc domain.ProjectService, serviceTokenSecret string) http.Handle
 	r.Get("/healthz/live", h.Liveness)
 	r.Get("/healthz/ready", h.Readiness)
 
+	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
+	mountDocs(r)
+
 	// Auth-protected routes
 	r.Group(func(r chi.Router) {
-		r.Use(jwtMiddleware)
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
 
 		r.Route("/api/v1/projects", func(r chi.Router) {
 			r.Post("/", h.CreateProject)
@@ -84,7 +89,7 @@ func NewRouter(svc domain.ProjectService, serviceTokenSecret string) http.Handle
 
 	// Internal service-to-service routes
 	r.Group(func(r chi.Router) {
-		r.Use(serviceTokenMiddleware(serviceTokenSecret))
+		r.Use(servicetoken.RequireServiceToken(stVerifier))
 		r.Get("/api/v1/internal/projects/{projectID}/permissions/{userID}", h.GetPermissions)
 	})
 

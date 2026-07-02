@@ -42,7 +42,7 @@ definierte Spalten (z. B. „Shipped") wurden unzuverlässig auf `open` gemappt.
 Gewählt wird **Option B — dedizierter `boardregistry`-Service** (Port 8007, `boardregistry_db`).
 
 - Der Project-Service löst Boardtypen zur Laufzeit über die internal-API der Registry auf
-  (`boardtypeclient`, TTL-Cache, `HMAC("internal")`-Service-Token) und validiert die Board-Config
+  (`boardtypeclient`, TTL-Cache, kurzlebiges `servicetoken`-JWT mit `aud:"internal"`) und validiert die Board-Config
   gegen das vom Typ gelieferte **JSON-Schema**.
 - Die alte `boardplugins`-Registry und das Legacy-Strategy-Interface wurden **entfernt**; Built-in-
   Typen (kanban/scrum/calendar) wurden als Seed in die Registry migriert.

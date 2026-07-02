@@ -17,8 +17,10 @@ import (
 	"github.com/teamboard/services/boardregistry/internal/config"
 	"github.com/teamboard/services/boardregistry/internal/domain"
 	"github.com/teamboard/services/boardregistry/internal/repository"
+	"github.com/teamboard/shared/go/authmiddleware"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -78,7 +80,9 @@ func main() {
 		}
 	}()
 
-	router := api.NewRouter(svc, pool, cfg.ServiceTokenSecret)
+	stVerifier := servicetoken.NewVerifier(cfg.ServiceTokenSecret, "internal")
+	jwks := authmiddleware.NewJWKSSource(cfg.JWKSURL)
+	router := api.NewRouter(svc, pool, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,

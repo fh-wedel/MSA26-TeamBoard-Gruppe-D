@@ -2,9 +2,6 @@ package documentclient
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,24 +9,21 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/teamboard/services/task/internal/domain"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 // Client calls the Document Service to validate document ownership.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	token      string
+	issuer     servicetoken.Issuer
 }
 
-func New(baseURL, serviceTokenSecret string) *Client {
-	mac := hmac.New(sha256.New, []byte(serviceTokenSecret))
-	mac.Write([]byte("internal"))
-	token := hex.EncodeToString(mac.Sum(nil))
-
+func New(baseURL string, issuer servicetoken.Issuer) *Client {
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 500 * time.Millisecond},
-		token:      token,
+		issuer:     issuer,
 	}
 }
 
@@ -39,7 +33,11 @@ func (c *Client) GetDocumentInfo(ctx context.Context, documentID uuid.UUID) (*do
 	if err != nil {
 		return nil, fmt.Errorf("document client: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	tok, err := c.issuer.Issue(ctx, "task-service", "internal")
+	if err != nil {
+		return nil, fmt.Errorf("document client: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

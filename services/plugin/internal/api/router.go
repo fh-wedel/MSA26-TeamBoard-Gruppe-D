@@ -7,9 +7,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/teamboard/services/plugin/internal/domain"
+	"github.com/teamboard/shared/go/authmiddleware"
 )
 
-func NewRouter(svc domain.WebhookService, pool *pgxpool.Pool) http.Handler {
+func NewRouter(svc domain.WebhookService, pool *pgxpool.Pool, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
@@ -22,8 +23,11 @@ func NewRouter(svc domain.WebhookService, pool *pgxpool.Pool) http.Handler {
 	r.Get("/health/live", he.live)
 	r.Get("/health/ready", he.ready)
 
+	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
+	mountDocs(r)
+
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(jwtMiddleware)
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
 
 		// Project-scoped webhook listing / creation
 		r.Route("/projects/{projectId}/webhooks", func(r chi.Router) {

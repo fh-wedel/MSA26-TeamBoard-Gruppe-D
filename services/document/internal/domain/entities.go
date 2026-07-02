@@ -137,7 +137,9 @@ var DefaultAllowedContentTypes = []string{
 	"text/plain",
 	"text/markdown",
 	"text/x-markdown",
-	"application/octet-stream",
+	// application/octet-stream bewusst NICHT erlaubt: generische Binär-/Executable-
+	// Uploads (z. B. malware.exe) sollen abgelehnt werden. Bekannte Binärformate
+	// werden über ihren spezifischen Content-Type freigegeben.
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 	"application/vnd.openxmlformats-officedocument.presentationml.presentation",
