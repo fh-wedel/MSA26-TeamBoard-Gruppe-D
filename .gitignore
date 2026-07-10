@@ -9,7 +9,6 @@ bin/
 *.test
 *.out
 vendor/
-go.sum
 
 # Environment
 .env
