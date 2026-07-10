@@ -296,7 +296,7 @@ services:
     labels:
       - traefik.enable=true
       - "traefik.http.routers.task.rule=PathPrefix(`/api/v1/tasks`) || PathPrefix(`/api/v1/comments`) || PathRegexp(`^/api/v1/boards/[^/]+/tasks`) || PathPrefix(`/task`)"
-      - "traefik.http.routers.task.priority=100"
+      - "traefik.http.routers.task.priority=200"
       - traefik.http.services.task.loadbalancer.server.port=8003
     networks:
       - teamboard-net
@@ -426,7 +426,7 @@ services:
     labels:
       - traefik.enable=true
       - "traefik.http.routers.plugin.rule=PathPrefix(`/api/v1/webhooks`) || PathRegexp(`^/api/v1/projects/[^/]+/webhooks`) || PathPrefix(`/plugin`)"
-      - "traefik.http.routers.plugin.priority=100"
+      - "traefik.http.routers.plugin.priority=200"
       - traefik.http.services.plugin.loadbalancer.server.port=8006
     networks:
       - teamboard-net
