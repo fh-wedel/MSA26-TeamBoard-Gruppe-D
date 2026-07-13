@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **TeamBoard** is a web-based collaboration platform designed as a microservice system. The repository currently contains architecture specifications and design documents; the actual implementation follows these specifications.
 
-**Tech stack:** Go 1.22+, Chi router, sqlc, PostgreSQL 16, Redis 7, RabbitMQ 3.12, Docker Compose, Traefik, AWS ECS Fargate.
+**Tech stack:** Go 1.22+, Chi router, sqlc, PostgreSQL 16, Redis 7, RabbitMQ 3.12, Docker Compose, Traefik, GitHub Actions, AWS EC2. See `docs/specifications/deployment.md` for the CI/CD and deployment setup.
 
 ---
 
@@ -109,8 +109,7 @@ teamboard/
 │   ├── specifications/       # Coding guidelines, shared lib spec, orchestration spec, gateway spec
 │   └── services/             # Per-service detail docs (DB schema, OpenAPI, use-cases)
 └── infra/
-    ├── traefik/              # Local gateway config
-    └── cdk/                  # AWS CDK (TypeScript)
+    └── traefik/              # Gateway config (local + prod)
 ```
 
 ---

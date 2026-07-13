@@ -3,7 +3,7 @@
 > **Zweck dieses Dokuments:** Master-Referenz für die Implementierung des TeamBoard-Systems. Dieses Dokument ist die zentrale Grundlage für KI-gestützte Entwicklung (Agentic Coding) und für menschliche Entwickler. Jeder Coding-Task referenziert dieses Dokument als Source of Truth.
 >
 > **Stand:** 2026-05  
-> **Tech-Stack:** Go 1.22+, Chi-Router, sqlc, PostgreSQL 16, Redis 7, RabbitMQ 3.12, Docker, AWS ECS Fargate
+> **Tech-Stack:** Go 1.22+, Chi-Router, sqlc, PostgreSQL 16, Redis 7, RabbitMQ 3.12, Docker Compose, Traefik, GitHub Actions, AWS EC2
 
 ---
 
@@ -335,9 +335,7 @@ teamboard/
 ├── docker-compose.override.yml       # lokale Overrides (Hot-Reload, Debug)
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                    # Lint, Test, Build pro Service
-│       ├── deploy-staging.yml
-│       └── deploy-prod.yml
+│       └── deploy.yml               # Build (Matrix→GHCR) + SSH-Deploy auf EC2
 ├── docs/
 │   ├── ARCHITECTURE.md               # ← dieses Dokument
 │   ├── decisions/                    # Architecture Decision Records (ADRs)
@@ -383,11 +381,8 @@ teamboard/
 │   ├── package.json
 │   └── Dockerfile
 ├── infra/
-│   ├── cdk/                          # AWS CDK (TypeScript)
-│   │   ├── bin/
-│   │   ├── lib/
-│   │   └── package.json
-│   └── traefik/                      # lokale Gateway-Konfiguration
+│   └── traefik/                      # Gateway-Konfiguration (lokal + Prod)
+├── deploy.sh                        # Roll-out auf der EC2-Box (von CI per SSH aufgerufen)
 └── scripts/
     ├── postgres-init.sh          # DB-Initialisierung (6 Datenbanken anlegen)
     ├── run-migrations.sh         # golang-migrate auf alle Service-DBs
@@ -888,36 +883,27 @@ make down       # fährt alles herunter
 
 ## 12. Deployment
 
-### 12.1 CI (GitHub Actions)
+> **Vollständige Spezifikation:** `docs/specifications/deployment.md`. Hier die Zusammenfassung.
 
-`.github/workflows/ci.yml` läuft bei Push und PR:
+### 12.1 CI/CD (GitHub Actions)
 
-1. **Detect Changes** — Path-Filter ermittelt geänderte Services
-2. **Lint** — `golangci-lint`, `eslint`
-3. **Test** — `make test` pro geändertem Service
-4. **Build** — Container-Image bauen
-5. **Push** — bei `main`-Branch in ECR
+Eine Pipeline (`.github/workflows/deploy.yml`) läuft bei jedem Push (und via `workflow_dispatch`), serialisiert über eine `concurrency`-Gruppe:
 
-### 12.2 CD (Staging/Prod)
+1. **Build (Matrix × 8)** — `auth · project · task · document · notification · plugin · boardregistry · frontend`, Buildx-Build gegen Target `production`.
+2. **Push** — nach GHCR (`ghcr.io/<owner>/teamboard-<service>`), getaggt mit Git-SHA **und** `latest`; Login über das eingebaute `GITHUB_TOKEN`.
+3. **Deploy (SSH)** — `appleboy/ssh-action` verbindet auf die EC2-Box, provisioniert sie idempotent (Git/Docker/Compose), checkt den Commit nach `/opt/teamboard` aus und ruft `deploy.sh` auf.
 
-Trigger bei Tag `v*.*.*`:
+### 12.2 Roll-out auf der Box (`deploy.sh`)
 
-1. CDK Synth + Deploy zu Staging
-2. Smoke-Tests
-3. Manuelle Approval-Stage
-4. Deploy zu Prod (Blue/Green via ECS)
+`flock`-serialisiert; generiert bei Erstlauf `/opt/teamboard/.env` mit zufälligen Secrets; `git reset --hard` auf den Ziel-SHA; leitet `PUBLIC_HOST` per IMDSv2 aus EC2-Metadata ab; `docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && up -d`; abschließend `docker image prune`.
 
 ### 12.3 AWS-Targets
 
-Siehe separates Dokument `docs/aws-deployment.md`. Zusammenfassung:
-
-- ECS Fargate für Services
-- RDS für Postgres
-- ElastiCache für Redis
-- Amazon MQ für RabbitMQ
-- S3 für Dokumente
-- API Gateway + CloudFront
-- Cognito für Auth (ersetzt eigenen Auth Service in Produktion optional)
+- **EC2** (Amazon Linux) — einzelner Host, fährt den kompletten Docker-Compose-Stack
+- **Elastic IP** — stabile `PUBLIC_HOST` für presigned URLs und Reset-Links
+- **Security Group** — Ports 22 (SSH), 80 (Traefik), 9000 (MinIO presigned Downloads)
+- **EBS** — persistente Docker-Volumes (Postgres/Redis/RabbitMQ/MinIO)
+- **GHCR** als Container-Registry; **Postgres/Redis/RabbitMQ/MinIO** laufen als Container auf der Box (nicht als Managed Services)
 
 ---
 
