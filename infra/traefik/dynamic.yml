@@ -1,0 +1,54 @@
+# Traefik dynamic configuration (file provider).
+# Loaded via --providers.file.filename=/etc/traefik/dynamic.yml and applied
+# globally on the `web` entrypoint, so every routed service is hardened at the
+# edge without per-service labels.
+http:
+  middlewares:
+    # Security response headers. The HSTS header (stsSeconds) only takes effect
+    # over HTTPS — browsers ignore it on the local plaintext :80 entrypoint, so it
+    # is harmless here and active automatically once TLS terminates at the edge.
+    secure-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "geolocation=(), microphone=(), camera=()"
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customResponseHeaders:
+          Server: ""
+          X-Powered-By: ""
+
+    # CORS for the browser SPA. Traefik answers preflight OPTIONS for the
+    # allowed origins and echoes the allowed methods/headers.
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PATCH
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+        accessControlAllowOriginList:
+          - "http://localhost:3000"
+          - "http://localhost:5173"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # Per-source-IP rate limit (token bucket). average = sustained rate over
+    # `period`; burst = short-term spike (covers parallel requests during SPA
+    # page load). Deliberately moderate: guards against flooding/scraping without
+    # throttling normal use. Login/Register additionally has a stricter
+    # application-level limit in the Auth service.
+    ratelimit:
+      rateLimit:
+        average: 50
+        period: 1s
+        burst: 100

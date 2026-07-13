@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: TeamBoard Auth Service
+  version: 1.0.0
+  description: >
+    JWT issuance, user registration/login, token refresh and revocation,
+    password reset, and the public JWKS endpoint used by every other service
+    to validate access tokens. Access tokens are RS256 JWTs; the matching
+    public keys are published at /.well-known/jwks.json.
+servers:
+  - url: http://localhost
+    description: Via Traefik gateway
+  - url: http://localhost:8001
+    description: Direct service port (when published)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Registration, login, token lifecycle, password reset
+  - name: users
+    description: Current-user profile
+  - name: jwks
+    description: Public signing keys
+
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: Register a new user
+      operationId: register
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/auth/login:
+    post:
+      summary: Log in with email and password
+      operationId: login
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Access + refresh token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPairResponse' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Exchange a refresh token for a new token pair
+      operationId: refresh
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: New access + refresh token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPairResponse' }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke a refresh token
+      operationId: logout
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogoutRequest' }
+      responses:
+        '204': { description: Refresh token revoked }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/auth/password-reset/request:
+    post:
+      summary: Request a password-reset token
+      operationId: requestPasswordReset
+      tags: [auth]
+      security: []
+      description: >
+        Always returns 202 regardless of whether the email exists, to avoid
+        account enumeration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestPasswordResetRequest' }
+      responses:
+        '202': { description: Reset requested (email sent if account exists) }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      summary: Confirm a password reset with a token
+      operationId: confirmPasswordReset
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmPasswordResetRequest' }
+      responses:
+        '204': { description: Password changed }
+        '401': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /api/v1/auth/me:
+    get:
+      summary: Get the currently authenticated user
+      operationId: getCurrentUser
+      tags: [users]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        '401': { $ref: '#/components/responses/Problem' }
+
+  /.well-known/jwks.json:
+    get:
+      summary: JSON Web Key Set for access-token validation
+      operationId: getJWKS
+      tags: [jwks]
+      security: []
+      responses:
+        '200':
+          description: Public signing keys
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JWKS' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    LogoutRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    RequestPasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ConfirmPasswordResetRequest:
+      type: object
+      required: [token, new_password]
+      properties:
+        token: { type: string }
+        new_password: { type: string, format: password, minLength: 8 }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        created_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time, nullable: true }
+
+    UserResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+
+    TokenPair:
+      type: object
+      properties:
+        access_token: { type: string, description: RS256 JWT access token }
+        refresh_token: { type: string }
+        expires_in: { type: integer, description: Access-token lifetime in seconds }
+        token_type: { type: string, example: Bearer }
+
+    TokenPairResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/TokenPair' }
+
+    JWKS:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              kty: { type: string }
+              use: { type: string }
+              kid: { type: string }
+              alg: { type: string }
+              n: { type: string }
+              e: { type: string }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        trace_id: { type: string }

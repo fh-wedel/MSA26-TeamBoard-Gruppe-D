@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: TeamBoard Notification Service
+  version: 1.0.0
+  description: >
+    Persistent per-user notifications plus real-time push over WebSocket.
+    The REST endpoints below manage the notification inbox and require a bearer
+    JWT issued by the Auth service. Real-time delivery is available over the
+    WebSocket endpoint `GET /ws?token=<access_token>` (not described by this
+    OpenAPI document, which only covers HTTP request/response operations).
+servers:
+  - url: http://localhost/api/v1
+    description: Via Traefik gateway
+  - url: http://localhost:8005/api/v1
+    description: Direct service port (when published)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: notifications
+    description: Notification inbox
+
+paths:
+  /notifications:
+    get:
+      summary: List notifications for the current user
+      operationId: listNotifications
+      tags: [notifications]
+      parameters:
+        - { in: query, name: unread_only, schema: { type: boolean, default: false } }
+        - { in: query, name: type, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 50, maximum: 200 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationList' }
+
+  /notifications/unread-count:
+    get:
+      summary: Get the number of unread notifications
+      operationId: getUnreadCount
+      tags: [notifications]
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnreadCountResponse' }
+
+  /notifications/read-all:
+    post:
+      summary: Mark all notifications as read
+      operationId: markAllRead
+      tags: [notifications]
+      responses:
+        '204': { description: All marked read }
+
+  /notifications/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/notificationId'
+    post:
+      summary: Mark a notification as read
+      operationId: markRead
+      tags: [notifications]
+      responses:
+        '204': { description: Marked read }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /notifications/{id}:
+    parameters:
+      - $ref: '#/components/parameters/notificationId'
+    delete:
+      summary: Delete a notification
+      operationId: deleteNotification
+      tags: [notifications]
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    notificationId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, description: Notification type slug, e.g. task.assigned }
+        payload:
+          type: object
+          additionalProperties: true
+        project_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true }
+
+    NotificationList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Notification' }
+        pagination:
+          type: object
+          properties:
+            next_cursor: { type: string, nullable: true }
+
+    UnreadCountResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          properties:
+            unread_count: { type: integer }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        trace_id: { type: string }

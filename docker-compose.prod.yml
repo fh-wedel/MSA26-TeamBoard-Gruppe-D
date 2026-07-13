@@ -1,0 +1,57 @@
+# Production overlay for the single-EC2 deployment.
+# Used together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Differences vs. local dev:
+#   - Domain services + frontend run from prebuilt ECR images (no build on the box).
+#   - The frontend is served *through* Traefik (single public entry on port 80),
+#     so it needs no public host port of its own.
+#   - Webhook SSRF guards are turned ON (public box).
+#   - MinIO presigned URLs + password-reset links point at the public host.
+#
+# Variables are supplied per-deploy by deploy.sh / CI:
+#   REGISTRY     — ghcr.io/<owner>            (from CI)
+#   TAG          — the git SHA                (from CI)
+#   PUBLIC_HOST  — Elastic IP                 (auto-derived, or set in .env)
+# App secrets (POSTGRES_PASSWORD, …) come from /opt/teamboard/.env.
+
+services:
+  auth:
+    image: ${REGISTRY}/teamboard-auth:${TAG}
+    environment:
+      PASSWORD_RESET_URL: http://${PUBLIC_HOST}/reset-password
+
+  project:
+    image: ${REGISTRY}/teamboard-project:${TAG}
+
+  task:
+    image: ${REGISTRY}/teamboard-task:${TAG}
+
+  document:
+    image: ${REGISTRY}/teamboard-document:${TAG}
+    environment:
+      # Presigned download URLs handed to the browser must use the public host.
+      S3_PUBLIC_ENDPOINT: http://${PUBLIC_HOST}:9000
+
+  notification:
+    image: ${REGISTRY}/teamboard-notification:${TAG}
+
+  plugin:
+    image: ${REGISTRY}/teamboard-plugin:${TAG}
+    environment:
+      # Block webhooks to private/internal addresses (SSRF protection) on a public box.
+      ALLOW_INSECURE_HTTP: "false"
+      ALLOW_PRIVATE_URLS: "false"
+
+  boardregistry:
+    image: ${REGISTRY}/teamboard-boardregistry:${TAG}
+
+  frontend:
+    image: ${REGISTRY}/teamboard-frontend:${TAG}
+    # Serve the SPA via Traefik with the lowest priority, so /api/* and /ws
+    # (matched by the service routers) win and everything else falls to the SPA.
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.priority=1"
+      - traefik.http.services.frontend.loadbalancer.server.port=3000

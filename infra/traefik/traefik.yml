@@ -1,0 +1,40 @@
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: INFO
+
+# Structured access log; never log credential-bearing headers in clear.
+# NOTE: tokens passed as a query parameter (e.g. the WebSocket `/ws?token=...`)
+# still appear in the logged request URI — Traefik cannot redact query strings.
+# Tracked in docs/TODO.md (move the WS token out of the query string).
+accessLog:
+  format: json
+  fields:
+    headers:
+      defaultMode: keep
+      names:
+        Authorization: redact
+        Cookie: redact
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: teamboard-net
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+entryPoints:
+  web:
+    address: ":80"
+    # Harden every routed service at the edge (middlewares defined in dynamic.yml).
+    http:
+      middlewares:
+        - secure-headers@file
+        - cors@file
+        - ratelimit@file
+  websecure:
+    address: ":443"
