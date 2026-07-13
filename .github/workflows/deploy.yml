@@ -40,6 +40,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Set build time
+        run: echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Build & push image
         uses: docker/build-push-action@v6
         with:
@@ -50,6 +53,9 @@ jobs:
           tags: |
             ghcr.io/${{ env.OWNER }}/teamboard-${{ matrix.service }}:${{ github.sha }}
             ghcr.io/${{ env.OWNER }}/teamboard-${{ matrix.service }}:latest
+          build-args: |
+            ${{ matrix.service == 'frontend' && format('VITE_BUILD_SHA={0}', github.sha) || '' }}
+            ${{ matrix.service == 'frontend' && format('VITE_BUILD_TIME={0}', env.BUILD_TIME) || '' }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 

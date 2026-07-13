@@ -85,6 +85,12 @@ export default function Sidebar() {
           <LogOut size={13} />
           Sign out
         </button>
+        {import.meta.env.VITE_BUILD_TIME && (
+          <p className="px-2 pt-2 text-[10px] text-text-3 truncate" title={import.meta.env.VITE_BUILD_SHA}>
+            Deployed {new Date(import.meta.env.VITE_BUILD_TIME).toLocaleString()}
+            {import.meta.env.VITE_BUILD_SHA && ` · ${import.meta.env.VITE_BUILD_SHA.slice(0, 7)}`}
+          </p>
+        )}
       </div>
     </aside>
   )
