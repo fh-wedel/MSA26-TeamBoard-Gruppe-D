@@ -109,7 +109,8 @@ func (s *Service) checkChannelPermission(ctx context.Context, userID uuid.UUID, 
 	}
 	chType, idStr := parts[0], parts[1]
 
-	if chType == "user" {
+	switch chType {
+	case "user":
 		uid, err := uuid.Parse(idStr)
 		if err != nil {
 			return domain.ErrInvalidChannel
@@ -118,45 +119,35 @@ func (s *Service) checkChannelPermission(ctx context.Context, userID uuid.UUID, 
 			return domain.ErrPermissionDenied
 		}
 		return nil
-	}
 
-	projectID, err := s.resolveProjectForChannel(ctx, chType, idStr)
-	if err != nil {
-		return err
-	}
-
-	perms, err := s.projCli.GetPermissions(ctx, projectID, userID)
-	if err != nil {
-		return err
-	}
-	if !perms.IsMember {
-		return domain.ErrPermissionDenied
-	}
-	return nil
-}
-
-func (s *Service) resolveProjectForChannel(ctx context.Context, chType, idStr string) (uuid.UUID, error) {
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return uuid.Nil, domain.ErrInvalidChannel
-	}
-	switch chType {
 	case "project":
-		return id, nil
+		projectID, err := uuid.Parse(idStr)
+		if err != nil {
+			return domain.ErrInvalidChannel
+		}
+		perms, err := s.projCli.GetPermissions(ctx, projectID, userID)
+		if err != nil {
+			return err
+		}
+		if !perms.IsMember {
+			return domain.ErrPermissionDenied
+		}
+		return nil
+
 	case "board", "task":
-		// For board and task channels the client provides the project_id as the channel target.
-		// In this MVP, board:{boardID} and task:{taskID} channels require the client to
-		// already be a project member — we trust the board/task ID to carry implicit project
-		// membership. The spec says "member of project (board belongs to)"; in a full
-		// implementation we'd look up the project via the Task/Project service. For the MVP
-		// we return a sentinel indicating the caller must have a valid project membership,
-		// relying on the frontend to send board:{boardID} only when in a project context.
-		// Since we cannot derive project from board/task ID synchronously here, we permit
-		// if the user has any valid connection (token proves they're logged in). Stricter
-		// enforcement is via project.member.removed channel cleanup.
-		return id, nil // treated as: caller must be authenticated (JWT already verified)
+		// board:{boardID} and task:{taskID} carry no project id we can resolve
+		// synchronously here (the notification service stores no board→project
+		// mapping), so we cannot run a membership check. The JWT is already
+		// verified, so we permit any authenticated user. This is the documented
+		// MVP behaviour; stricter per-project enforcement is a TODO (would require
+		// persisting a board→project map from board.created events).
+		if _, err := uuid.Parse(idStr); err != nil {
+			return domain.ErrInvalidChannel
+		}
+		return nil
+
 	default:
-		return uuid.Nil, domain.ErrInvalidChannel
+		return domain.ErrInvalidChannel
 	}
 }
 

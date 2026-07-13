@@ -48,6 +48,12 @@ Offen bleibt:
 - [ ] **Board-Registry-Schreibrouten** (`POST/PATCH/DELETE /api/v1/board-types`) sind derzeit
   für **jeden authentifizierten User** offen. Auf Admin-/Publisher-Rolle beschränken. —
   `boardregistry.md` (Authz-Offene Stelle), `ADR 0001`
+- [ ] **WS-Board-/Task-Channel-Subscription** (`board:{id}`, `task:{id}`) wird derzeit für
+  **jeden authentifizierten User** erlaubt, da der Notification-Service keine
+  Board→Projekt-Zuordnung kennt und Membership nicht synchron prüfen kann. Härtung: aus
+  `board.created`/`column.*`-Events eine `known_boards`-Map persistieren und in
+  `checkChannelPermission` das Projekt auflösen + Membership prüfen. —
+  `notification/internal/push/service.go`
 
 ## 4. Infrastruktur / Deployment
 

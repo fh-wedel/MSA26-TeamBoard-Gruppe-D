@@ -1,19 +1,26 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Info, Plus } from 'lucide-react'
 import { boardsApi } from '../../api/projects'
 import { tasksApi } from '../../api/tasks'
 import { useUIStore } from '../../stores/uiStore'
 import { useBoardType } from '../../hooks/useBoardTypes'
+import { useWebSocket } from '../../hooks/useWebSocket'
 import { resolveView } from '../../components/board/views'
 import CreateTaskModal from '../../components/board/CreateTaskModal'
 import TaskDetailPanel from '../../components/task/TaskDetailPanel'
+
+const TASK_EVENT_TYPES = new Set([
+  'task.created', 'task.updated', 'task.moved', 'task.status.changed',
+  'task.assigned', 'task.unassigned', 'task.deleted',
+])
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>()
   const { selectedTaskId, selectTask } = useUIStore()
   const [showCreateTask, setShowCreateTask] = useState(false)
+  const qc = useQueryClient()
 
   const { data: boardData } = useQuery({
     queryKey: ['board', boardId],
@@ -26,6 +33,14 @@ export default function BoardPage() {
     queryFn: () => tasksApi.list(boardId!),
     enabled: !!boardId,
   })
+
+  // Live updates: another tab/user moving, editing, or deleting a task on this
+  // board refreshes the list here too.
+  useWebSocket((msg) => {
+    if (msg.type === 'event' && TASK_EVENT_TYPES.has(msg.data?.event_type)) {
+      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+    }
+  }, !!boardId, boardId ? [`board:${boardId}`] : [])
 
   const board = boardData?.data
   const tasks = tasksData?.data ?? []

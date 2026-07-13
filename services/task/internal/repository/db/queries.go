@@ -134,7 +134,7 @@ const moveTask = `
 UPDATE tasks SET column_id=$2,position=$3,status=$4,updated_at=NOW()
 WHERE id=$1 AND deleted_at IS NULL
 RETURNING id,board_id,project_id,column_id,title,description,status,priority,
-          assignee_id,due_date,labels,position,created_by,created_at,updated_at,deleted_at`
+          assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at`
 
 func (q *queries) MoveTask(ctx context.Context, id, columnID uuid.UUID, position, status string) (*Task, error) {
 	return scanTask(q.db.QueryRow(ctx, moveTask, id, columnID, position, status))
@@ -143,7 +143,7 @@ func (q *queries) MoveTask(ctx context.Context, id, columnID uuid.UUID, position
 const assignTask = `
 UPDATE tasks SET assignee_id=$2,updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL
 RETURNING id,board_id,project_id,column_id,title,description,status,priority,
-          assignee_id,due_date,labels,position,created_by,created_at,updated_at,deleted_at`
+          assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at`
 
 func (q *queries) AssignTask(ctx context.Context, id uuid.UUID, assigneeID *uuid.UUID) (*Task, error) {
 	return scanTask(q.db.QueryRow(ctx, assignTask, id, assigneeID))

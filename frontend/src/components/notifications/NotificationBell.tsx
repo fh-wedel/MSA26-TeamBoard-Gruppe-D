@@ -10,6 +10,8 @@ import clsx from 'clsx'
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
+  const [pulse, setPulse] = useState(false)
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
   const { user } = useAuthStore()
@@ -26,11 +28,18 @@ export default function NotificationBell() {
     enabled: open,
   })
 
+  // Live push: a new notification refreshes the unread count (and the open list)
+  // immediately and briefly pulses the bell so the new item is noticed.
   useWebSocket((msg) => {
     if (msg.type === 'notification') {
       qc.invalidateQueries({ queryKey: ['notifications'] })
+      setPulse(true)
+      if (pulseTimer.current) clearTimeout(pulseTimer.current)
+      pulseTimer.current = setTimeout(() => setPulse(false), 2500)
     }
   }, !!user)
+
+  useEffect(() => () => { if (pulseTimer.current) clearTimeout(pulseTimer.current) }, [])
 
   const markRead = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
@@ -73,13 +82,17 @@ export default function NotificationBell() {
       <button onClick={() => setOpen(!open)}
         className={clsx(
           'relative w-8 h-8 flex items-center justify-center rounded text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors',
-          open && 'bg-bg-3 text-text-0'
+          open && 'bg-bg-3 text-text-0',
+          pulse && 'text-accent'
         )}>
-        <Bell size={16} />
+        <Bell size={16} className={pulse ? 'animate-bounce' : ''} />
         {count > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-accent text-bg-0 text-[10px] font-bold rounded-full flex items-center justify-center">
             {count > 9 ? '9+' : count}
           </span>
+        )}
+        {pulse && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-accent/60 animate-ping" />
         )}
       </button>
 

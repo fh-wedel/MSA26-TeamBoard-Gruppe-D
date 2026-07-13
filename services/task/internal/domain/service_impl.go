@@ -183,7 +183,7 @@ func (s *service) UpdateTask(ctx context.Context, taskID, requester uuid.UUID, p
 		if txErr = tx.CreateHistoryEntry(ctx, uuid.New(), taskID, requester, ChangeUpdated, diff); txErr != nil {
 			return txErr
 		}
-		payload, _ := json.Marshal(map[string]any{"task_id": taskID, "project_id": task.ProjectID, "changes": diff})
+		payload, _ := json.Marshal(map[string]any{"task_id": taskID, "board_id": task.BoardID, "project_id": task.ProjectID, "changes": diff})
 		return tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.updated", payload)
 	})
 	if txErr != nil {
@@ -245,7 +245,7 @@ func (s *service) MoveTask(ctx context.Context, taskID, requester uuid.UUID, col
 		}
 
 		movedPayload, _ := json.Marshal(map[string]any{
-			"task_id": taskID, "project_id": task.ProjectID,
+			"task_id": taskID, "board_id": task.BoardID, "project_id": task.ProjectID,
 			"from_column_id": oldColumnID, "to_column_id": columnID, "position": newPos,
 		})
 		if txErr = tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.moved", movedPayload); txErr != nil {
@@ -254,7 +254,7 @@ func (s *service) MoveTask(ctx context.Context, taskID, requester uuid.UUID, col
 
 		if newStatus != oldStatus {
 			statusPayload, _ := json.Marshal(map[string]any{
-				"task_id": taskID, "project_id": task.ProjectID,
+				"task_id": taskID, "board_id": task.BoardID, "project_id": task.ProjectID,
 				"from": oldStatus, "to": newStatus,
 			})
 			return tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.status.changed", statusPayload)
@@ -330,7 +330,10 @@ func (s *service) DeleteTask(ctx context.Context, taskID, requester uuid.UUID) e
 		if err := tx.CreateHistoryEntry(ctx, uuid.New(), taskID, requester, ChangeDeleted, map[string]any{}); err != nil {
 			return err
 		}
-		payload, _ := json.Marshal(map[string]any{"task_id": taskID, "project_id": task.ProjectID, "deleted_by": requester})
+		payload, _ := json.Marshal(map[string]any{
+			"task_id": taskID, "board_id": task.BoardID, "project_id": task.ProjectID,
+			"assignee_id": task.AssigneeID, "deleted_by": requester,
+		})
 		return tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.deleted", payload)
 	})
 }

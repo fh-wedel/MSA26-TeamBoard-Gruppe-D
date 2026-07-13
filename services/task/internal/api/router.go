@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -106,6 +107,7 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		writeProblem(w, r, status, de.Code, de.Message)
 		return
 	}
+	slog.ErrorContext(r.Context(), "unmapped domain error", "error", err, "trace_id", middleware.GetReqID(r.Context()))
 	writeProblem(w, r, http.StatusInternalServerError, "internal_error", "an unexpected error occurred")
 }
 
