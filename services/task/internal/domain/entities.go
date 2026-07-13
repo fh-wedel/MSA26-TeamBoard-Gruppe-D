@@ -154,6 +154,7 @@ type TaskPatch struct {
 	Title        *string
 	Description  *string
 	Priority     *Priority
+	Status       *Status
 	DueDate      *time.Time
 	DueDateSet   bool // true when DueDate is explicitly present in the patch (even if nil)
 	StartDate    *time.Time

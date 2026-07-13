@@ -121,13 +121,14 @@ UPDATE tasks SET
     due_date    = CASE WHEN $5::BOOLEAN THEN $6 ELSE due_date END,
     start_date  = CASE WHEN $7::BOOLEAN THEN $8 ELSE start_date END,
     labels      = COALESCE($9,labels),
+    status      = COALESCE($10,status),
     updated_at  = NOW()
 WHERE id=$1 AND deleted_at IS NULL
 RETURNING id,board_id,project_id,column_id,title,description,status,priority,
           assignee_id,due_date,start_date,labels,position,created_by,created_at,updated_at,deleted_at`
 
-func (q *queries) UpdateTask(ctx context.Context, id uuid.UUID, title, description, priority *string, dueDateSet bool, dueDate *time.Time, startDateSet bool, startDate *time.Time, labels []string) (*Task, error) {
-	return scanTask(q.db.QueryRow(ctx, updateTask, id, title, description, priority, dueDateSet, dueDate, startDateSet, startDate, labels))
+func (q *queries) UpdateTask(ctx context.Context, id uuid.UUID, title, description, priority *string, dueDateSet bool, dueDate *time.Time, startDateSet bool, startDate *time.Time, labels []string, status *string) (*Task, error) {
+	return scanTask(q.db.QueryRow(ctx, updateTask, id, title, description, priority, dueDateSet, dueDate, startDateSet, startDate, labels, status))
 }
 
 const moveTask = `

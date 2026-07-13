@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Kanban, Plus, Users, Settings, ChevronRight, Mail, Clock } from 'lucide-react'
-import { projectsApi } from '../../api/projects'
+import { Kanban, Plus, Users, Settings, ChevronRight, Mail, Clock, Trash2, UserMinus, FileText } from 'lucide-react'
+import { projectsApi, boardsApi } from '../../api/projects'
 import { invitationsApi } from '../../api/invitations'
 import type { BoardTypeDef } from '../../api/types'
 import { formatDistanceToNow } from 'date-fns'
 import SchemaForm from '../../components/board/SchemaForm'
 import { useBoardTypes } from '../../hooks/useBoardTypes'
+import { useAuthStore } from '../../stores/authStore'
+import DocumentsPanel from '../../components/documents/DocumentsPanel'
 
 // Registry icons are emoji strings; fall back to a Lucide glyph when absent.
 function BoardTypeIcon({ icon, size = 16 }: { icon?: string; size?: number }) {
@@ -153,8 +155,10 @@ function CreateBoardModal({ projectId, onClose }: { projectId: string; onClose: 
 
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
   const [showCreateBoard, setShowCreateBoard] = useState(false)
-  const [activeTab, setActiveTab] = useState<'boards' | 'members' | 'settings'>('boards')
+  const [activeTab, setActiveTab] = useState<'boards' | 'members' | 'files' | 'settings'>('boards')
 
   const { data: projectData } = useQuery({
     queryKey: ['project', projectId],
@@ -168,10 +172,22 @@ export default function ProjectPage() {
     enabled: !!projectId,
   })
 
+  // Members are loaded regardless of the active tab so we can derive the current
+  // user's role and gate the board/member management actions accordingly.
   const { data: membersData } = useQuery({
     queryKey: ['members', projectId],
     queryFn: () => projectsApi.listMembers(projectId!),
-    enabled: !!projectId && activeTab === 'members',
+    enabled: !!projectId,
+  })
+
+  const deleteBoard = useMutation({
+    mutationFn: (boardId: string) => boardsApi.delete(boardId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['boards', projectId] }),
+  })
+
+  const removeMember = useMutation({
+    mutationFn: (userId: string) => projectsApi.removeMember(projectId!, userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['members', projectId] }),
   })
 
   const { data: invitationsData } = useQuery({
@@ -191,6 +207,10 @@ export default function ProjectPage() {
   const invitations = invitationsData?.data ?? []
   const pendingInvitations = invitations.filter(i => i.status === 'pending')
 
+  const myRole = members.find((m) => m.user_id === user?.id)?.role
+  const canManageBoards = myRole === 'owner' || myRole === 'editor'
+  const canManageMembers = myRole === 'owner'
+
   if (!project) return null
 
   return (
@@ -206,6 +226,7 @@ export default function ProjectPage() {
         {[
           { id: 'boards', label: 'Boards', icon: <Kanban size={14} /> },
           { id: 'members', label: `Members${pendingInvitations.length > 0 ? ` (${pendingInvitations.length} pending)` : ''}`, icon: <Users size={14} /> },
+          { id: 'files', label: 'Dateien', icon: <FileText size={14} /> },
           { id: 'settings', label: 'Settings', icon: <Settings size={14} /> },
         ].map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)}
@@ -230,10 +251,24 @@ export default function ProjectPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {boards.map((board) => (
               <Link key={board.id} to={`/projects/${projectId}/boards/${board.id}`}
-                className="card p-5 hover:border-border-3 hover:bg-bg-3 transition-all group">
+                className="card p-5 hover:border-border-3 hover:bg-bg-3 transition-all group relative">
                 <div className="flex items-start justify-between mb-3">
                   <div className="text-accent"><BoardTypeIcon icon={boardTypeByType.get(board.type)?.icon} /></div>
-                  <ChevronRight size={14} className="text-text-3 group-hover:text-text-1 transition-colors" />
+                  {canManageBoards ? (
+                    <button
+                      type="button"
+                      title="Board löschen"
+                      onClick={(e) => {
+                        e.preventDefault(); e.stopPropagation()
+                        if (window.confirm(`Board „${board.name}" wirklich löschen? Alle Aufgaben darin gehen verloren.`))
+                          deleteBoard.mutate(board.id)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-text-3 hover:text-danger p-0.5">
+                      <Trash2 size={14} />
+                    </button>
+                  ) : (
+                    <ChevronRight size={14} className="text-text-3 group-hover:text-text-1 transition-colors" />
+                  )}
                 </div>
                 <h3 className="font-medium text-text-0 text-sm mb-1">{board.name}</h3>
                 <p className="text-xs text-text-3 capitalize">{boardTypeByType.get(board.type)?.display_name ?? board.type}</p>
@@ -279,13 +314,28 @@ export default function ProjectPage() {
                     <p className="mono">{new Date(m.joined_at).toLocaleDateString()}</p>
                   </div>
                 </div>
-                <span className={`status-badge text-xs px-2 py-0.5 rounded ${
-                  m.role === 'owner' ? 'bg-amber/10 text-amber border border-amber/20' :
-                  m.role === 'editor' ? 'bg-accent/10 text-accent border border-accent/20' :
-                  'bg-bg-3 text-text-2 border border-border-2'
-                }`}>
-                  {m.role}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`status-badge text-xs px-2 py-0.5 rounded ${
+                    m.role === 'owner' ? 'bg-amber/10 text-amber border border-amber/20' :
+                    m.role === 'editor' ? 'bg-accent/10 text-accent border border-accent/20' :
+                    'bg-bg-3 text-text-2 border border-border-2'
+                  }`}>
+                    {m.role}
+                  </span>
+                  {canManageMembers && m.role !== 'owner' && (
+                    <button
+                      type="button"
+                      title="Mitglied entfernen"
+                      disabled={removeMember.isPending}
+                      onClick={() => {
+                        if (window.confirm(`${m.email ?? m.user_id} wirklich aus dem Projekt entfernen?`))
+                          removeMember.mutate(m.user_id)
+                      }}
+                      className="text-text-3 hover:text-danger p-1 rounded transition-colors">
+                      <UserMinus size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -319,6 +369,11 @@ export default function ProjectPage() {
             <InviteModal projectId={projectId} onClose={() => setShowInviteModal(false)} />
           )}
         </>
+      )}
+
+      {/* Files Tab */}
+      {activeTab === 'files' && projectId && (
+        <DocumentsPanel projectId={projectId} canManage={canManageBoards} />
       )}
 
       {/* Settings Tab */}

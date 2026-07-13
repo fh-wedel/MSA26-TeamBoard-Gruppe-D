@@ -127,7 +127,12 @@ func (r *postgresRepo) UpdateTask(ctx context.Context, id uuid.UUID, patch domai
 	if patch.Labels != nil {
 		labelsArg = *patch.Labels
 	}
-	t, err := r.q.UpdateTask(ctx, id, patch.Title, patch.Description, priority, patch.DueDateSet, patch.DueDate, patch.StartDateSet, patch.StartDate, labelsArg)
+	var status *string
+	if patch.Status != nil {
+		s := string(*patch.Status)
+		status = &s
+	}
+	t, err := r.q.UpdateTask(ctx, id, patch.Title, patch.Description, priority, patch.DueDateSet, patch.DueDate, patch.StartDateSet, patch.StartDate, labelsArg, status)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrTaskNotFound

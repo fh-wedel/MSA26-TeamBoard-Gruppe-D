@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { ApiItem, ApiList, Attachment, Comment, HistoryEntry, Priority, Task } from './types'
+import type { ApiItem, ApiList, Attachment, Comment, HistoryEntry, Priority, Task, TaskStatus } from './types'
 
 export const tasksApi = {
   list: (boardId: string, params?: { column_id?: string; status?: string; limit?: number; cursor?: string }) => {
@@ -30,6 +30,7 @@ export const tasksApi = {
     title?: string
     description?: string
     priority?: Priority
+    status?: TaskStatus
     due_date?: string | null
     start_date?: string | null
     labels?: string[]

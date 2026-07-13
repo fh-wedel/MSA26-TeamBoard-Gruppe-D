@@ -171,11 +171,16 @@ func (s *service) UpdateTask(ctx context.Context, taskID, requester uuid.UUID, p
 	if patch.Priority != nil && !ValidPriority(*patch.Priority) {
 		return nil, ErrValidation
 	}
+	if patch.Status != nil && !ValidStatus(*patch.Status) {
+		return nil, ErrValidation
+	}
 
 	updated, err := s.repo.UpdateTask(ctx, taskID, patch)
 	if err != nil {
 		return nil, ErrTaskNotFound
 	}
+
+	statusChanged := patch.Status != nil && *patch.Status != task.Status
 
 	diff := buildUpdateDiff(task, patch)
 	var txErr error
@@ -184,7 +189,19 @@ func (s *service) UpdateTask(ctx context.Context, taskID, requester uuid.UUID, p
 			return txErr
 		}
 		payload, _ := json.Marshal(map[string]any{"task_id": taskID, "board_id": task.BoardID, "project_id": task.ProjectID, "changes": diff})
-		return tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.updated", payload)
+		if txErr = tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.updated", payload); txErr != nil {
+			return txErr
+		}
+		// Emit a dedicated status-change event so notification/live-update consumers
+		// react identically whether the status changed via a move or a direct edit.
+		if statusChanged {
+			statusPayload, _ := json.Marshal(map[string]any{
+				"task_id": taskID, "board_id": task.BoardID, "project_id": task.ProjectID,
+				"from": task.Status, "to": *patch.Status,
+			})
+			return tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.status.changed", statusPayload)
+		}
+		return nil
 	})
 	if txErr != nil {
 		return nil, txErr
@@ -613,6 +630,9 @@ func buildUpdateDiff(old *Task, patch TaskPatch) map[string]any {
 	}
 	if patch.Priority != nil && *patch.Priority != old.Priority {
 		diff["priority"] = map[string]any{"from": old.Priority, "to": *patch.Priority}
+	}
+	if patch.Status != nil && *patch.Status != old.Status {
+		diff["status"] = map[string]any{"from": old.Status, "to": *patch.Status}
 	}
 	if patch.DueDateSet {
 		diff["due_date"] = map[string]any{"from": old.DueDate, "to": patch.DueDate}

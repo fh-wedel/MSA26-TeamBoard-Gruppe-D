@@ -237,6 +237,14 @@ func parseTaskPatch(body []byte) (domain.TaskPatch, error) {
 		p := domain.Priority(s)
 		patch.Priority = &p
 	}
+	if v, ok := raw["status"]; ok {
+		var s string
+		if err := json.Unmarshal(v, &s); err != nil {
+			return patch, err
+		}
+		st := domain.Status(s)
+		patch.Status = &st
+	}
 	if v, ok := raw["due_date"]; ok {
 		patch.DueDateSet = true
 		if string(v) != "null" {

@@ -4,10 +4,12 @@ import {
   X, Trash2, MessageSquare, Clock, Tag, AlertTriangle, Send, Pencil
 } from 'lucide-react'
 import { tasksApi } from '../../api/tasks'
+import { boardsApi } from '../../api/projects'
 import { useAuthStore } from '../../stores/authStore'
 import { format, formatDistanceToNow } from 'date-fns'
-import type { Priority, TaskStatus } from '../../api/types'
+import type { Column, TaskStatus, Priority } from '../../api/types'
 import clsx from 'clsx'
+import TaskAttachments from './TaskAttachments'
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'open',        label: 'Open',        color: 'text-text-2' },
@@ -16,6 +18,25 @@ const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'done',        label: 'Done',         color: 'text-success' },
   { value: 'archived',    label: 'Archived',     color: 'text-text-3' },
 ]
+
+// Mirrors the Task service's DeriveStatus: the semantic status of a column when
+// it carries no explicit `status` (legacy columns).
+function deriveStatus(name: string): TaskStatus {
+  const n = name.toLowerCase()
+  if (n.includes('done') || n.includes('complete')) return 'done'
+  if (n.includes('progress') || n.includes('doing')) return 'in_progress'
+  if (n.includes('block')) return 'blocked'
+  if (n.includes('archive')) return 'archived'
+  return 'open'
+}
+
+// The column whose semantic status matches the target status, if any. Used to
+// keep the board column and the task status in sync when the status is changed
+// from the detail panel (the reverse of a drag, which the move endpoint already
+// handles server-side).
+function columnForStatus(columns: Column[], status: TaskStatus): Column | undefined {
+  return columns.find((c) => (c.status ?? deriveStatus(c.name)) === status)
+}
 
 const PRIORITY_OPTIONS: { value: Priority; color: string }[] = [
   { value: 'critical', color: 'text-danger' },
@@ -41,6 +62,13 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
     queryFn: () => tasksApi.listComments(taskId),
   })
 
+  const boardId = data?.data?.board_id
+  const { data: boardData } = useQuery({
+    queryKey: ['board', boardId],
+    queryFn: () => boardsApi.get(boardId!),
+    enabled: !!boardId,
+  })
+
   const updateTask = useMutation({
     mutationFn: (patch: Parameters<typeof tasksApi.update>[1]) => tasksApi.update(taskId, patch),
     onSuccess: (res) => {
@@ -48,6 +76,28 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
       qc.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
+
+  const moveTask = useMutation({
+    mutationFn: (columnId: string) => tasksApi.move(taskId, columnId),
+    onSuccess: (res) => {
+      qc.setQueryData(['task', taskId], res)
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  // Changing the status moves the task into the matching column when the board
+  // has one (open/in_progress/done on a Kanban board); the move endpoint then
+  // derives the same status server-side. Statuses without a column (typically
+  // blocked/archived) fall back to a plain status update.
+  function changeStatus(newStatus: TaskStatus) {
+    const columns = boardData?.data?.columns ?? []
+    const target = columnForStatus(columns, newStatus)
+    if (target && target.id !== task?.column_id) {
+      moveTask.mutate(target.id)
+    } else {
+      updateTask.mutate({ status: newStatus })
+    }
+  }
 
   const postComment = useMutation({
     mutationFn: () => tasksApi.createComment(taskId, commentBody),
@@ -57,6 +107,11 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
   const deleteComment = useMutation({
     mutationFn: (commentId: string) => tasksApi.deleteComment(taskId, commentId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['comments', taskId] }),
+  })
+
+  const deleteTask = useMutation({
+    mutationFn: () => tasksApi.delete(taskId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); onClose() },
   })
 
   const task = data?.data
@@ -124,7 +179,7 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
             <div>
               <p className="label mb-1.5">Status</p>
               <select value={task.status}
-                onChange={(e) => updateTask.mutate({ title: task.title })} // status update needs separate endpoint
+                onChange={(e) => changeStatus(e.target.value as TaskStatus)}
                 className="input-base w-full text-xs">
                 {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
@@ -195,6 +250,11 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
             />
           </div>
 
+          {/* Attachments */}
+          <div className="px-5 py-4 border-b border-border-1">
+            <TaskAttachments taskId={taskId} projectId={task.project_id} />
+          </div>
+
           {/* Comments */}
           <div className="px-5 py-4">
             <p className="label mb-3 flex items-center gap-1.5">
@@ -254,8 +314,11 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
           <span className="mono">
             {task.updated_at ? `Updated ${format(new Date(task.updated_at), 'MMM d, HH:mm')}` : ''}
           </span>
-          <button className="btn-danger flex items-center gap-1.5 py-1.5">
-            <Trash2 size={13} /> Delete
+          <button
+            onClick={() => { if (window.confirm('Diese Aufgabe wirklich löschen?')) deleteTask.mutate() }}
+            disabled={deleteTask.isPending}
+            className="btn-danger flex items-center gap-1.5 py-1.5">
+            <Trash2 size={13} /> {deleteTask.isPending ? 'Löschen…' : 'Delete'}
           </button>
         </div>
       </div>

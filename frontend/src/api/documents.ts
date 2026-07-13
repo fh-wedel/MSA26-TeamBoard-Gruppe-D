@@ -31,4 +31,28 @@ export const documentsApi = {
 
   getDownloadUrl: (id: string) =>
     api.get<ApiItem<DownloadInfo>>(`/documents/${id}/download`),
+
+  // upload runs the full three-step flow: reserve a document + presigned URL,
+  // PUT the bytes straight to object storage (MinIO/S3), then confirm so the
+  // version is marked available. Returns the confirmed Document.
+  upload: async (projectId: string, file: File): Promise<Document> => {
+    const contentType = file.type || 'application/octet-stream'
+    const { data: init } = await documentsApi.initiateUpload(projectId, file.name, contentType, file.size)
+
+    const put = await fetch(init.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`Upload fehlgeschlagen (${put.status})`)
+
+    const { data: doc } = await documentsApi.confirmUpload(init.document.id, init.version.version_number)
+    return doc
+  },
+
+  // download resolves a fresh presigned URL and triggers the browser download.
+  download: async (id: string): Promise<void> => {
+    const { data } = await documentsApi.getDownloadUrl(id)
+    window.open(data.download_url, '_blank', 'noopener,noreferrer')
+  },
 }

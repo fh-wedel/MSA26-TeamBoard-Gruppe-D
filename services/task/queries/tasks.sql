@@ -47,6 +47,7 @@ UPDATE tasks SET
     due_date    = CASE WHEN $5::BOOLEAN THEN $6 ELSE due_date END,
     start_date  = CASE WHEN $7::BOOLEAN THEN $8 ELSE start_date END,
     labels      = COALESCE($9, labels),
+    status      = COALESCE($10, status),
     updated_at  = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

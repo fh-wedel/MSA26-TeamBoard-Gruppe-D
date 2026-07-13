@@ -359,6 +359,7 @@ components:
         title: { type: string }
         description: { type: string }
         priority: { $ref: '#/components/schemas/Priority' }
+        status: { $ref: '#/components/schemas/Status' }
         due_date: { type: string, format: date-time, nullable: true }
         start_date: { type: string, format: date-time, nullable: true }
         labels:
