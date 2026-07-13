@@ -663,6 +663,10 @@ components:
 | POST | `/auth/password-reset/request` | öffentlich | Reset anfordern |
 | POST | `/auth/password-reset/confirm` | öffentlich | Reset durchführen |
 | GET | `/.well-known/jwks.json` | öffentlich | JWKS |
+| POST | `/auth/tokens` | Bearer | Personal Access Token erstellen (§17) |
+| GET | `/auth/tokens` | Bearer | Eigene PATs auflisten (§17) |
+| DELETE | `/auth/tokens/{id}` | Bearer | PAT revozieren (§17) |
+| POST | `/internal/tokens/introspect` | Service-Token | PAT auflösen, für andere Services (§17) |
 | GET | `/health/live` | öffentlich | Liveness |
 | GET | `/health/ready` | öffentlich | Readiness |
 
@@ -1470,6 +1474,62 @@ docker-build:
 | UC-5 Reset Request | Antwort 202 unabhängig von Existenz der E-Mail |
 | UC-6 Reset Confirm | Passwort aktualisiert, alle Refresh-Tokens revoziert, Reset-Token als used markiert |
 | UC-7 JWKS | Liefert alle Keys mit `deleted_at IS NULL`, korrektes JWK-Format |
+
+---
+
+## 17. Personal Access Tokens (PAT)
+
+### 17.1 Zweck
+
+Langlebige, vom User selbst verwaltete Credentials für externe Clients, die sich nicht über den
+normalen Login-Flow anmelden können — z. B. den TeamBoard-MCP-Server (`mcp-server/`) für Claude
+Desktop. Erstellung/Verwaltung im Frontend unter **Settings**.
+
+### 17.2 Format und Speicherung
+
+**Format:** `tbpat_` + 32 zufällige Bytes (hex-codiert). Der `tbpat_`-Präfix ist nicht geheim —
+er erlaubt `shared/go/authmiddleware`, ein Token ohne JWT-Parse-Versuch direkt an die
+Introspection zu routen.
+
+**Speicherung:** Nur SHA-256-Hash in `personal_access_tokens` (analog `refresh_tokens`, **nicht**
+analog dem Webhook-Secret im Plugin-Service — letzteres muss server-seitig reproduzierbar sein,
+ein PAT wird nur verglichen). Zusätzlich `token_prefix` (erste 12 Zeichen) für die Anzeige in der
+Token-Liste.
+
+```sql
+personal_access_tokens (
+    id, user_id, name, token_hash, token_prefix,
+    created_at, expires_at, revoked_at, last_used_at
+)
+```
+
+**Rechte:** Ein PAT hat dieselben Permissions wie ein normaler Login (kein eigenes RBAC/Scope —
+davon gibt es aktuell nirgends im System eines). **TTL:** vom User bei Erstellung gewählt (30 /
+90 / 365 Tage).
+
+### 17.3 Endpunkte
+
+| Methode | Pfad | Auth | Beschreibung |
+|---------|------|------|--------------|
+| POST | `/api/v1/auth/tokens` | Bearer | Neues PAT erstellen — Rohwert nur in dieser Response |
+| GET | `/api/v1/auth/tokens` | Bearer | Eigene PATs auflisten (nie mit Rohwert) |
+| DELETE | `/api/v1/auth/tokens/{id}` | Bearer | PAT revozieren (idempotent) |
+| POST | `/api/v1/internal/tokens/introspect` | Service-Token | PAT → `{user_id, email}` auflösen |
+
+### 17.4 Validierung durch andere Services
+
+PATs sind **opaque**, nicht selbst-validierend wie Access-JWTs — andere Services können sie also
+nicht rein über die JWKS prüfen. Project-, Task- und Board-Registry-Service akzeptieren sie
+stattdessen über denselben Mechanismus, der bereits für Permission-Checks existiert: ein
+`authclient.Client` pro Service (Kopie von `projectclient.Client`s Aufbau — In-Process-Cache
+30s TTL + Circuit-Breaker) ruft `POST /api/v1/internal/tokens/introspect` synchron auf.
+`shared/go/authmiddleware.Middleware` erkennt den `tbpat_`-Präfix und routet automatisch dorthin,
+wenn ein Service `authmiddleware.WithPATIntrospector(...)` konfiguriert hat — ohne diese Option
+bleibt das Verhalten für andere Services unverändert (nur RS256-JWTs).
+
+**Eventual Consistency bei Revocation:** Eine Revocation braucht bis zu 30s (Cache-TTL), um bei
+den aufrufenden Services anzukommen — keine Events, keine aktive Invalidierung. Dieselbe Klasse
+von Verzögerung akzeptiert das System bereits beim Project-Service-Permission-Cache (P8).
 
 ---
 

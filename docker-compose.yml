@@ -162,6 +162,9 @@ services:
       - --accesslog=true
     ports:
       - "80:80"
+      # HTTPS (self-signed by default). Needed for the MCP server route, since
+      # Claude Code's HTTP transport requires an https:// URL.
+      - "443:443"
       # Dashboard runs with --api.insecure=true; keep it loopback-only.
       - "127.0.0.1:8080:8080"
     volumes:
@@ -198,6 +201,7 @@ services:
       PASSWORD_RESET_TTL: 1h
       PASSWORD_RESET_URL: http://localhost:3000/reset-password
       KEY_ENCRYPTION_KEY: ${KEY_ENCRYPTION_KEY}
+      SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     depends_on:
       migrate:
@@ -236,6 +240,7 @@ services:
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
       JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
       BOARDREGISTRY_SERVICE_URL: http://boardregistry:8007
+      AUTH_SERVICE_URL: http://auth:8001
       OTEL_ENDPOINT: http://jaeger:4317
     depends_on:
       migrate:
@@ -277,6 +282,7 @@ services:
       PROJECT_SERVICE_URL: http://project:8002
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
       JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
+      AUTH_SERVICE_URL: http://auth:8001
       OTEL_ENDPOINT: http://jaeger:4317
     depends_on:
       migrate:
@@ -445,6 +451,7 @@ services:
       RABBITMQ_EXCHANGE: teamboard.events
       SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET}
       JWT_JWKS_URL: http://auth:8001/.well-known/jwks.json
+      AUTH_SERVICE_URL: http://auth:8001
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -475,5 +482,29 @@ services:
       - "127.0.0.1:3000:3000"
     depends_on:
       - traefik
+    networks:
+      - teamboard-net
+
+  # Multi-tenant MCP server (Streamable HTTP transport) for Claude Desktop / Code.
+  # Each request carries the caller's own personal access token, so one instance
+  # serves everyone. Routed by Traefik at /mcp on both :80 and :443 (self-signed);
+  # calls back into the gateway to reach the domain services.
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_ADDR: ":8080"
+      TEAMBOARD_API_URL: http://traefik
+    depends_on:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.mcp.rule=PathPrefix(`/mcp`)"
+      - "traefik.http.routers.mcp.middlewares=mcp-strip"
+      - "traefik.http.middlewares.mcp-strip.stripprefix.prefixes=/mcp"
+      - traefik.http.services.mcp.loadbalancer.server.port=8080
     networks:
       - teamboard-net

@@ -239,6 +239,60 @@ func (s *service) GetUser(ctx context.Context, userID uuid.UUID) (*User, error) 
 	return user, nil
 }
 
+// CreatePAT issues a new personal access token for userID.
+func (s *service) CreatePAT(ctx context.Context, userID uuid.UUID, name string, ttl time.Duration) (*PersonalAccessToken, string, error) {
+	rawToken, hash, prefix, err := GeneratePAT()
+	if err != nil {
+		return nil, "", fmt.Errorf("generate PAT: %w", err)
+	}
+
+	expiresAt := time.Now().Add(ttl)
+	pat, err := s.repo.CreatePersonalAccessToken(ctx, uuid.New(), userID, name, hash, prefix, expiresAt)
+	if err != nil {
+		return nil, "", fmt.Errorf("store PAT: %w", err)
+	}
+
+	slog.InfoContext(ctx, "personal access token created", "user_id", userID, "pat_id", pat.ID)
+	return pat, rawToken, nil
+}
+
+// ListPATs returns all personal access tokens for userID.
+func (s *service) ListPATs(ctx context.Context, userID uuid.UUID) ([]*PersonalAccessToken, error) {
+	return s.repo.ListPersonalAccessTokensByUser(ctx, userID)
+}
+
+// RevokePAT revokes a personal access token owned by userID.
+func (s *service) RevokePAT(ctx context.Context, userID, patID uuid.UUID) error {
+	return s.repo.RevokePersonalAccessToken(ctx, patID, userID)
+}
+
+// IntrospectPAT validates a raw token and returns its owning user. Called by
+// other services (via the internal introspection endpoint) to authenticate
+// requests bearing a PAT instead of a session JWT.
+func (s *service) IntrospectPAT(ctx context.Context, rawToken string) (*User, error) {
+	hash := hashToken(rawToken)
+
+	pat, err := s.repo.GetPersonalAccessTokenByHash(ctx, hash)
+	if err != nil {
+		return nil, ErrTokenInvalid
+	}
+	if !pat.IsValid() {
+		return nil, ErrTokenInvalid
+	}
+
+	user, err := s.repo.GetUserByID(ctx, pat.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+
+	// Best-effort — a failed touch must not fail the authenticated request.
+	if err := s.repo.TouchPersonalAccessTokenLastUsed(ctx, pat.ID); err != nil {
+		slog.WarnContext(ctx, "failed to update PAT last_used_at", "error", err, "pat_id", pat.ID)
+	}
+
+	return user, nil
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 func (s *service) issuePair(ctx context.Context, user *User, ip, userAgent interface{}) (*TokenPair, error) {

@@ -30,6 +30,9 @@ type Config struct {
 	BoardRegistryTimeout time.Duration `env:"BOARDREGISTRY_TIMEOUT"     envDefault:"500ms"`
 	BoardTypeCacheTTL    time.Duration `env:"BOARDTYPE_CACHE_TTL"       envDefault:"60s"`
 
+	// Auth service (personal access token introspection).
+	AuthServiceURL string `env:"AUTH_SERVICE_URL" envDefault:"http://auth:8001"`
+
 	LogLevel  string `env:"LOG_LEVEL"  envDefault:"info"`
 	OTELEndpoint string `env:"OTEL_ENDPOINT" envDefault:""`
 }

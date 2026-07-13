@@ -47,6 +47,13 @@ type Querier interface {
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
 	GetUnpublishedEvents(ctx context.Context, limit int32) ([]Outbox, error)
 	MarkEventPublished(ctx context.Context, id uuid.UUID) error
+
+	// Personal access tokens
+	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
+	GetPersonalAccessTokenByHash(ctx context.Context, tokenHash string) (PersonalAccessToken, error)
+	ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]PersonalAccessToken, error)
+	RevokePersonalAccessToken(ctx context.Context, arg RevokePersonalAccessTokenParams) error
+	TouchPersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error
 }
 
 // Param structs
@@ -104,4 +111,18 @@ type InsertOutboxEventParams struct {
 	AggregateID uuid.UUID `json:"aggregate_id"`
 	EventType   string    `json:"event_type"`
 	Payload     []byte    `json:"payload"`
+}
+
+type CreatePersonalAccessTokenParams struct {
+	ID          uuid.UUID `json:"id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Name        string    `json:"name"`
+	TokenHash   string    `json:"token_hash"`
+	TokenPrefix string    `json:"token_prefix"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+type RevokePersonalAccessTokenParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
 }

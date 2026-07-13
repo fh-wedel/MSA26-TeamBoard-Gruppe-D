@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/teamboard/services/auth/internal/domain"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 // Handlers bundles all HTTP handlers for the auth service.
@@ -25,7 +26,7 @@ func NewHandlers(svc domain.AuthService, repo domain.Repository, pool *pgxpool.P
 }
 
 // NewRouter wires the Chi router with all routes and middleware.
-func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Pool, issuer, audience string) http.Handler {
+func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Pool, issuer, audience string, stVerifier servicetoken.Verifier) http.Handler {
 	h := NewHandlers(svc, repo, pool)
 	r := chi.NewRouter()
 
@@ -56,7 +57,19 @@ func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Poo
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth(repo, issuer, audience))
 			r.Get("/me", h.GetUser)
+
+			r.Route("/tokens", func(r chi.Router) {
+				r.Post("/", h.CreatePAT)
+				r.Get("/", h.ListPATs)
+				r.Delete("/{id}", h.RevokePAT)
+			})
 		})
+	})
+
+	// Internal service-to-service routes
+	r.Group(func(r chi.Router) {
+		r.Use(servicetoken.RequireServiceToken(stVerifier))
+		r.Post("/api/v1/internal/tokens/introspect", h.IntrospectPAT)
 	})
 
 	return r

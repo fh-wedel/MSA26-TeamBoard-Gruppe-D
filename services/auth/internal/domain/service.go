@@ -16,6 +16,15 @@ type AuthService interface {
 	RequestPasswordReset(ctx context.Context, email string) error
 	ConfirmPasswordReset(ctx context.Context, token, newPassword string) error
 	GetUser(ctx context.Context, userID uuid.UUID) (*User, error)
+
+	// CreatePAT issues a new personal access token for userID. The raw token is
+	// returned only here — it is never retrievable again.
+	CreatePAT(ctx context.Context, userID uuid.UUID, name string, ttl time.Duration) (*PersonalAccessToken, string, error)
+	ListPATs(ctx context.Context, userID uuid.UUID) ([]*PersonalAccessToken, error)
+	RevokePAT(ctx context.Context, userID, patID uuid.UUID) error
+	// IntrospectPAT validates a raw token and returns its owning user. Used by
+	// the internal introspection endpoint other services call.
+	IntrospectPAT(ctx context.Context, rawToken string) (*User, error)
 }
 
 // Repository is the persistence interface consumed by the domain layer.
@@ -32,6 +41,13 @@ type Repository interface {
 	GetRefreshTokenByHash(ctx context.Context, hash string) (*RefreshToken, error)
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID, replacedBy *uuid.UUID) error
 	RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error
+
+	// Personal access tokens
+	CreatePersonalAccessToken(ctx context.Context, id, userID uuid.UUID, name, tokenHash, tokenPrefix string, expiresAt time.Time) (*PersonalAccessToken, error)
+	GetPersonalAccessTokenByHash(ctx context.Context, hash string) (*PersonalAccessToken, error)
+	ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]*PersonalAccessToken, error)
+	RevokePersonalAccessToken(ctx context.Context, id, userID uuid.UUID) error
+	TouchPersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error
 
 	// Password reset
 	CreatePasswordResetToken(ctx context.Context, id, userID uuid.UUID, hash string, expiresAt time.Time) (*PasswordResetToken, error)

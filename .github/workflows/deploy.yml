@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, project, task, document, notification, plugin, boardregistry, frontend]
+        service: [auth, project, task, document, notification, plugin, boardregistry, frontend, mcp-server]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,8 +46,8 @@ jobs:
       - name: Build & push image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.service == 'frontend' && './frontend' || '.' }}
-          file: ${{ matrix.service == 'frontend' && 'frontend/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
+          context: ${{ matrix.service == 'frontend' && './frontend' || matrix.service == 'mcp-server' && './mcp-server' || '.' }}
+          file: ${{ matrix.service == 'frontend' && 'frontend/Dockerfile' || matrix.service == 'mcp-server' && 'mcp-server/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
           target: production
           push: true
           tags: |

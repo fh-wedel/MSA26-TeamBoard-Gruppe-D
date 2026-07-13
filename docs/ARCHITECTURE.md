@@ -380,6 +380,16 @@ teamboard/
 │   ├── src/
 │   ├── package.json
 │   └── Dockerfile
+├── mcp-server/                       # MCP-Server für Claude Desktop/Code. Kein Domain-Service
+│   │                                 # (kein DB), aber als Streamable-HTTP-Server hinter Traefik
+│   │                                 # unter /mcp deployt (multi-tenant: PAT pro Request im Header).
+│   │                                 # Alternativ lokal per stdio (Single-User, TEAMBOARD_TOKEN).
+│   ├── cmd/mcp-server/main.go        # wählt Transport via MCP_TRANSPORT (http | stdio)
+│   ├── internal/
+│   │   ├── teamboard/                # HTTP-Client gegen die Gateway-Routen (PAT als Bearer)
+│   │   └── tools/                    # MCP-Tools: Projekte/Boards/Tasks lesen, Board-Typen verwalten
+│   ├── Dockerfile
+│   └── README.md
 ├── infra/
 │   └── traefik/                      # Gateway-Konfiguration (lokal + Prod)
 ├── deploy.sh                        # Roll-out auf der EC2-Box (von CI per SSH aufgerufen)

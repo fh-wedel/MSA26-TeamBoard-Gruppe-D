@@ -18,7 +18,7 @@ type Handlers struct {
 }
 
 // NewRouter wires all routes and returns the root handler.
-func NewRouter(svc domain.TaskService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string) http.Handler {
+func NewRouter(svc domain.TaskService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, patIntrospector authmiddleware.TokenIntrospector) http.Handler {
 	h := &Handlers{svc: svc}
 	r := chi.NewRouter()
 
@@ -33,7 +33,7 @@ func NewRouter(svc domain.TaskService, jwks authmiddleware.JWKSSource, jwtIssuer
 	mountDocs(r)
 
 	r.Group(func(r chi.Router) {
-		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience, patIntrospector))
 
 		// Tasks via board
 		r.Route("/api/v1/boards/{boardID}/tasks", func(r chi.Router) {

@@ -14,6 +14,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/teamboard/services/boardregistry/internal/api"
+	"github.com/teamboard/services/boardregistry/internal/authclient"
 	"github.com/teamboard/services/boardregistry/internal/config"
 	"github.com/teamboard/services/boardregistry/internal/domain"
 	"github.com/teamboard/services/boardregistry/internal/repository"
@@ -80,9 +81,11 @@ func main() {
 		}
 	}()
 
+	stIssuer := servicetoken.NewIssuer(cfg.ServiceTokenSecret)
 	stVerifier := servicetoken.NewVerifier(cfg.ServiceTokenSecret, "internal")
 	jwks := authmiddleware.NewJWKSSource(cfg.JWKSURL)
-	router := api.NewRouter(svc, pool, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier)
+	authClient := authclient.New(cfg.AuthServiceURL, stIssuer)
+	router := api.NewRouter(svc, pool, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier, authClient)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,

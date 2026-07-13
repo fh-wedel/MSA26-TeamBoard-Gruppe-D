@@ -9,6 +9,7 @@ import RegisterPage from './pages/auth/RegisterPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import ProjectPage from './pages/project/ProjectPage'
 import BoardPage from './pages/board/BoardPage'
+import SettingsPage from './pages/settings/SettingsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuthStore()
@@ -50,6 +51,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="/projects/:projectId" element={<ProjectPage />} />
           <Route path="/projects/:projectId/boards/:boardId" element={<BoardPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

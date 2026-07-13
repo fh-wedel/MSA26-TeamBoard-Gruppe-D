@@ -16,7 +16,7 @@ type Handlers struct {
 	svc domain.ProjectService
 }
 
-func NewRouter(svc domain.ProjectService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier) http.Handler {
+func NewRouter(svc domain.ProjectService, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier, patIntrospector authmiddleware.TokenIntrospector) http.Handler {
 	h := &Handlers{svc: svc}
 	r := chi.NewRouter()
 
@@ -33,7 +33,7 @@ func NewRouter(svc domain.ProjectService, jwks authmiddleware.JWKSSource, jwtIss
 
 	// Auth-protected routes
 	r.Group(func(r chi.Router) {
-		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience, patIntrospector))
 
 		r.Route("/api/v1/projects", func(r chi.Router) {
 			r.Post("/", h.CreateProject)

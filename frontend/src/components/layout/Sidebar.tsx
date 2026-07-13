@@ -80,6 +80,16 @@ export default function Sidebar() {
           </div>
           <span className="text-xs text-text-2 truncate flex-1">{user?.email}</span>
         </div>
+        <Link to="/settings"
+          className={clsx(
+            'flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs transition-colors',
+            location.pathname === '/settings'
+              ? 'bg-bg-3 text-text-0'
+              : 'text-text-3 hover:bg-bg-2 hover:text-text-1'
+          )}>
+          <Settings size={13} />
+          Settings
+        </Link>
         <button onClick={logout}
           className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs text-text-3 hover:text-danger hover:bg-danger/5 transition-colors">
           <LogOut size={13} />

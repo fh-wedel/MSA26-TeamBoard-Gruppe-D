@@ -24,6 +24,7 @@ import (
 	"github.com/teamboard/services/auth/internal/repository"
 	"github.com/teamboard/shared/go/eventbus"
 	"github.com/teamboard/shared/go/outbox"
+	"github.com/teamboard/shared/go/servicetoken"
 )
 
 func main() {
@@ -141,7 +142,8 @@ func run() error {
 	}()
 
 	// HTTP server
-	router := api.NewRouter(svc, repo, pool, cfg.Issuer, cfg.Audience)
+	stVerifier := servicetoken.NewVerifier(cfg.ServiceTokenSecret, "internal")
+	router := api.NewRouter(svc, repo, pool, cfg.Issuer, cfg.Audience, stVerifier)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      router,

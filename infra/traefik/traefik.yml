@@ -38,3 +38,15 @@ entryPoints:
         - ratelimit@file
   websecure:
     address: ":443"
+    # Terminate TLS for every router attached to this entrypoint. With no
+    # certResolver configured, Traefik serves its built-in self-signed default
+    # certificate — enough for a self-hosted box reached by IP (local or EC2),
+    # where public-CA issuance (Let's Encrypt needs a domain) isn't available.
+    # To upgrade to a real cert later: point a domain at the box, add an ACME
+    # certResolver here, and set `tls.certResolver` on the routers.
+    http:
+      tls: {}
+      middlewares:
+        - secure-headers@file
+        - cors@file
+        - ratelimit@file

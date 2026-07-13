@@ -69,3 +69,15 @@ type Outbox struct {
 	OccurredAt  time.Time  `json:"occurred_at"`
 	PublishedAt *time.Time `json:"published_at"`
 }
+
+type PersonalAccessToken struct {
+	ID          uuid.UUID  `json:"id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	Name        string     `json:"name"`
+	TokenHash   string     `json:"token_hash"`
+	TokenPrefix string     `json:"token_prefix"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+}

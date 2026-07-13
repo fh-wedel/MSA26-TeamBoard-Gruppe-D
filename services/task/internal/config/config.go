@@ -13,6 +13,7 @@ type Config struct {
 
 	ProjectServiceURL  string `env:"PROJECT_SERVICE_URL"  envDefault:"http://project:8002"`
 	DocumentServiceURL string `env:"DOCUMENT_SERVICE_URL" envDefault:"http://document:8004"`
+	AuthServiceURL     string `env:"AUTH_SERVICE_URL"     envDefault:"http://auth:8001"`
 
 	ServiceTokenSecret string `env:"SERVICE_TOKEN_SECRET" envRequired:"true"`
 

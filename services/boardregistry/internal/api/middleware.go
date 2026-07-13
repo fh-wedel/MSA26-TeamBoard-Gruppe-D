@@ -13,14 +13,16 @@ type ctxKey string
 
 const ctxUserID ctxKey = "user_id"
 
-// newJWTMiddleware validates the Bearer JWT against the auth service's JWKS
-// (RS256 signature + iss/aud/exp enforced) via the shared authmiddleware, then
+// newJWTMiddleware validates the Bearer token against the auth service's JWKS
+// (RS256 signature + iss/aud/exp enforced) via the shared authmiddleware —
+// or, if patIntrospector is non-nil, against a personal access token — then
 // mirrors the user ID into this service's local context key so handlers keep
 // reading it through mustUserID.
-func newJWTMiddleware(jwks authmiddleware.JWKSSource, issuer, audience string) func(http.Handler) http.Handler {
+func newJWTMiddleware(jwks authmiddleware.JWKSSource, issuer, audience string, patIntrospector authmiddleware.TokenIntrospector) func(http.Handler) http.Handler {
 	verify := authmiddleware.Middleware(jwks,
 		authmiddleware.WithIssuer(issuer),
 		authmiddleware.WithAudience(audience),
+		authmiddleware.WithPATIntrospector(patIntrospector),
 	)
 	return func(next http.Handler) http.Handler {
 		return verify(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

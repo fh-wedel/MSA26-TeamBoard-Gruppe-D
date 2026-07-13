@@ -265,6 +265,60 @@ func (q *Queries) MarkEventPublished(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+// ── Personal Access Tokens ────────────────────────────────────────────────
+
+const createPersonalAccessToken = `
+INSERT INTO personal_access_tokens (id, user_id, name, token_hash, token_prefix, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, user_id, name, token_hash, token_prefix, created_at, expires_at, revoked_at, last_used_at`
+
+func (q *Queries) CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error) {
+	row := q.db.QueryRow(ctx, createPersonalAccessToken, arg.ID, arg.UserID, arg.Name, arg.TokenHash, arg.TokenPrefix, arg.ExpiresAt)
+	return scanPersonalAccessToken(row)
+}
+
+const getPersonalAccessTokenByHash = `
+SELECT id, user_id, name, token_hash, token_prefix, created_at, expires_at, revoked_at, last_used_at
+FROM personal_access_tokens WHERE token_hash = $1`
+
+func (q *Queries) GetPersonalAccessTokenByHash(ctx context.Context, tokenHash string) (PersonalAccessToken, error) {
+	row := q.db.QueryRow(ctx, getPersonalAccessTokenByHash, tokenHash)
+	return scanPersonalAccessToken(row)
+}
+
+func scanPersonalAccessToken(row pgx.Row) (PersonalAccessToken, error) {
+	var t PersonalAccessToken
+	err := row.Scan(&t.ID, &t.UserID, &t.Name, &t.TokenHash, &t.TokenPrefix, &t.CreatedAt, &t.ExpiresAt, &t.RevokedAt, &t.LastUsedAt)
+	return t, err
+}
+
+func (q *Queries) ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]PersonalAccessToken, error) {
+	rows, err := q.db.Query(ctx, `SELECT id, user_id, name, token_hash, token_prefix, created_at, expires_at, revoked_at, last_used_at FROM personal_access_tokens WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tokens []PersonalAccessToken
+	for rows.Next() {
+		t, err := scanPersonalAccessToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
+func (q *Queries) RevokePersonalAccessToken(ctx context.Context, arg RevokePersonalAccessTokenParams) error {
+	_, err := q.db.Exec(ctx, `UPDATE personal_access_tokens SET revoked_at = NOW() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL`, arg.ID, arg.UserID)
+	return err
+}
+
+func (q *Queries) TouchPersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, `UPDATE personal_access_tokens SET last_used_at = NOW() WHERE id = $1`, id)
+	return err
+}
+
 // isNotFound returns true for pgx "no rows" errors.
 func isNotFound(err error) bool {
 	return errors.Is(err, pgx.ErrNoRows)

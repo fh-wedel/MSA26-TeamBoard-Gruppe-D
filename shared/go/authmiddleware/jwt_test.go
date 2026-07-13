@@ -152,6 +152,84 @@ func TestMiddleware_ValidTokenInjectsUserID(t *testing.T) {
 	}
 }
 
+// stubIntrospector implements TokenIntrospector against an in-memory token map.
+type stubIntrospector struct {
+	tokens map[string]struct {
+		userID uuid.UUID
+		email  string
+	}
+}
+
+func (s stubIntrospector) Introspect(_ context.Context, token string) (uuid.UUID, string, error) {
+	v, ok := s.tokens[token]
+	if !ok {
+		return uuid.Nil, "", jwt.ErrTokenUnverifiable
+	}
+	return v.userID, v.email, nil
+}
+
+func TestMiddleware_PATIntrospection(t *testing.T) {
+	_, jwks := newSigner(t)
+	uid := uuid.New()
+	introspector := stubIntrospector{tokens: map[string]struct {
+		userID uuid.UUID
+		email  string
+	}{
+		"tbpat_validtoken": {userID: uid, email: "alice@teamboard.local"},
+	}}
+
+	var gotID uuid.UUID
+	var gotEmail string
+	h := Middleware(jwks, WithIssuer(testIssuer), WithAudience(testAudience), WithPATIntrospector(introspector))(
+		http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			gotID = MustUserID(r.Context())
+			gotEmail, _ = EmailFromContext(r.Context())
+		}))
+
+	t.Run("valid PAT", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer tbpat_validtoken")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rec.Code)
+		}
+		if gotID != uid {
+			t.Errorf("user id = %s, want %s", gotID, uid)
+		}
+		if gotEmail != "alice@teamboard.local" {
+			t.Errorf("email = %q", gotEmail)
+		}
+	})
+
+	t.Run("unknown PAT rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer tbpat_doesnotexist")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("status = %d, want 401", rec.Code)
+		}
+	})
+}
+
+func TestMiddleware_WithoutIntrospectorIgnoresPATPrefix(t *testing.T) {
+	_, jwks := newSigner(t)
+	// No WithPATIntrospector — a tbpat_-prefixed token must fail JWT parsing,
+	// not silently succeed. Backward-compatibility guarantee.
+	h := Middleware(jwks, WithIssuer(testIssuer), WithAudience(testAudience))(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer tbpat_sometoken")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
+	}
+}
+
 func TestMiddleware_RejectsMissingAndForgedTokens(t *testing.T) {
 	_, jwks := newSigner(t)
 	h := Middleware(jwks, WithIssuer(testIssuer), WithAudience(testAudience))(

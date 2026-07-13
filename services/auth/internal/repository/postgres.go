@@ -110,6 +110,54 @@ func (r *postgresRepo) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID
 	return r.q.RevokeAllUserTokens(ctx, userID)
 }
 
+// ── Personal access tokens ───────────────────────────────────────────────────
+
+func (r *postgresRepo) CreatePersonalAccessToken(ctx context.Context, id, userID uuid.UUID, name, tokenHash, tokenPrefix string, expiresAt time.Time) (*domain.PersonalAccessToken, error) {
+	row, err := r.q.CreatePersonalAccessToken(ctx, db.CreatePersonalAccessTokenParams{
+		ID:          id,
+		UserID:      userID,
+		Name:        name,
+		TokenHash:   tokenHash,
+		TokenPrefix: tokenPrefix,
+		ExpiresAt:   expiresAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mapPersonalAccessToken(row), nil
+}
+
+func (r *postgresRepo) GetPersonalAccessTokenByHash(ctx context.Context, hash string) (*domain.PersonalAccessToken, error) {
+	row, err := r.q.GetPersonalAccessTokenByHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrTokenInvalid
+		}
+		return nil, err
+	}
+	return mapPersonalAccessToken(row), nil
+}
+
+func (r *postgresRepo) ListPersonalAccessTokensByUser(ctx context.Context, userID uuid.UUID) ([]*domain.PersonalAccessToken, error) {
+	rows, err := r.q.ListPersonalAccessTokensByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	tokens := make([]*domain.PersonalAccessToken, len(rows))
+	for i, row := range rows {
+		tokens[i] = mapPersonalAccessToken(row)
+	}
+	return tokens, nil
+}
+
+func (r *postgresRepo) RevokePersonalAccessToken(ctx context.Context, id, userID uuid.UUID) error {
+	return r.q.RevokePersonalAccessToken(ctx, db.RevokePersonalAccessTokenParams{ID: id, UserID: userID})
+}
+
+func (r *postgresRepo) TouchPersonalAccessTokenLastUsed(ctx context.Context, id uuid.UUID) error {
+	return r.q.TouchPersonalAccessTokenLastUsed(ctx, id)
+}
+
 // ── Password reset ──────────────────────────────────────────────────────────
 
 func (r *postgresRepo) CreatePasswordResetToken(ctx context.Context, id, userID uuid.UUID, hash string, expiresAt time.Time) (*domain.PasswordResetToken, error) {
@@ -261,6 +309,20 @@ func mapPasswordResetToken(t db.PasswordResetToken) *domain.PasswordResetToken {
 		IssuedAt:  t.IssuedAt,
 		ExpiresAt: t.ExpiresAt,
 		UsedAt:    t.UsedAt,
+	}
+}
+
+func mapPersonalAccessToken(t db.PersonalAccessToken) *domain.PersonalAccessToken {
+	return &domain.PersonalAccessToken{
+		ID:          t.ID,
+		UserID:      t.UserID,
+		Name:        t.Name,
+		TokenHash:   t.TokenHash,
+		TokenPrefix: t.TokenPrefix,
+		CreatedAt:   t.CreatedAt,
+		ExpiresAt:   t.ExpiresAt,
+		RevokedAt:   t.RevokedAt,
+		LastUsedAt:  t.LastUsedAt,
 	}
 }
 

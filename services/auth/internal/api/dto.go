@@ -31,6 +31,15 @@ type confirmPasswordResetRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+type createPATRequest struct {
+	Name          string `json:"name"`
+	ExpiresInDays int    `json:"expires_in_days"`
+}
+
+type introspectRequest struct {
+	Token string `json:"token"`
+}
+
 // ── Response DTOs ──────────────────────────────────────────────────────────────
 
 type userResponse struct {
@@ -45,4 +54,26 @@ type tokenPairResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int    `json:"expires_in"`
 	TokenType    string `json:"token_type"`
+}
+
+// patResponse never carries the raw token — only patCreatedResponse does, and
+// only in the response to the create call.
+type patResponse struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	TokenPrefix string     `json:"token_prefix"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+}
+
+type patCreatedResponse struct {
+	patResponse
+	Token string `json:"token"`
+}
+
+type introspectResponse struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
 }

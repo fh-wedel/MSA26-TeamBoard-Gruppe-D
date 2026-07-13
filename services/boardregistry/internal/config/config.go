@@ -25,6 +25,9 @@ type Config struct {
 	JWTIssuer   string `env:"JWT_ISSUER"   envDefault:"https://auth.teamboard.local"`
 	JWTAudience string `env:"JWT_AUDIENCE" envDefault:"teamboard-api"`
 
+	// Auth service (personal access token introspection).
+	AuthServiceURL string `env:"AUTH_SERVICE_URL" envDefault:"http://auth:8001"`
+
 	OutboxInterval  time.Duration `env:"OUTBOX_INTERVAL"   envDefault:"2s"`
 	OutboxBatchSize int32         `env:"OUTBOX_BATCH_SIZE" envDefault:"50"`
 }

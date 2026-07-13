@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/teamboard/services/project/internal/api"
+	"github.com/teamboard/services/project/internal/authclient"
 	"github.com/teamboard/services/project/internal/boardtypeclient"
 	"github.com/teamboard/services/project/internal/cache"
 	"github.com/teamboard/services/project/internal/config"
@@ -87,6 +88,7 @@ func main() {
 	permCache := cache.NewRedis(redisClient)
 	boardTypes := boardtypeclient.New(cfg.BoardRegistryURL, stIssuer, cfg.BoardRegistryTimeout, cfg.BoardTypeCacheTTL)
 	svc := domain.NewProjectService(repo, permCache, boardTypes)
+	authClient := authclient.New(cfg.AuthServiceURL, stIssuer)
 
 	// Outbox publisher (shared eventbus + outbox worker)
 	pub, err := eventbus.NewPublisher(rabbitConn, cfg.RabbitExchange)
@@ -127,7 +129,7 @@ func main() {
 	}()
 
 	// HTTP server
-	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier)
+	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience, stVerifier, authClient)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      router,

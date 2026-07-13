@@ -16,7 +16,7 @@ import (
 )
 
 // NewRouter wires the HTTP routes for the board-registry service.
-func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier) http.Handler {
+func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, jwks authmiddleware.JWKSSource, jwtIssuer, jwtAudience string, stVerifier servicetoken.Verifier, patIntrospector authmiddleware.TokenIntrospector) http.Handler {
 	h := &handlers{svc: svc}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -33,7 +33,7 @@ func NewRouter(svc domain.BoardTypeService, pool *pgxpool.Pool, jwks authmiddlew
 	// NOTE: write endpoints are currently open to any authenticated user. Restricting
 	// registration to an admin/publisher role is tracked as follow-up work.
 	r.Group(func(r chi.Router) {
-		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience))
+		r.Use(newJWTMiddleware(jwks, jwtIssuer, jwtAudience, patIntrospector))
 		r.Route("/api/v1/board-types", func(r chi.Router) {
 			r.Get("/", h.list)
 			r.Post("/", h.register)

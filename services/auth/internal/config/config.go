@@ -49,6 +49,9 @@ type Config struct {
 	// Key encryption
 	KeyEncryptionKey string `env:"KEY_ENCRYPTION_KEY,required"`
 
+	// Service-to-service auth (internal PAT introspection endpoint)
+	ServiceTokenSecret string `env:"SERVICE_TOKEN_SECRET,required"`
+
 	// Outbox worker
 	OutboxPollInterval time.Duration `env:"OUTBOX_POLL_INTERVAL" envDefault:"1s"`
 	OutboxBatchSize    int           `env:"OUTBOX_BATCH_SIZE"    envDefault:"50"`

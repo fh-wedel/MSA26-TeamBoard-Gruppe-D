@@ -14,6 +14,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/teamboard/services/task/internal/api"
+	"github.com/teamboard/services/task/internal/authclient"
 	"github.com/teamboard/services/task/internal/config"
 	"github.com/teamboard/services/task/internal/documentclient"
 	"github.com/teamboard/services/task/internal/domain"
@@ -70,6 +71,7 @@ func main() {
 	// Clients
 	projClient := projectclient.New(cfg.ProjectServiceURL, stIssuer)
 	docClient := documentclient.New(cfg.DocumentServiceURL, stIssuer)
+	authClient := authclient.New(cfg.AuthServiceURL, stIssuer)
 
 	// Domain wiring
 	repo := repository.New(pool)
@@ -114,7 +116,7 @@ func main() {
 	}()
 
 	// HTTP server
-	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience)
+	router := api.NewRouter(svc, jwks, cfg.JWTIssuer, cfg.JWTAudience, authClient)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      router,

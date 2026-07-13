@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ type fakeRepo struct {
 	usersByID     map[uuid.UUID]*domain.User
 	refreshTokens map[string]*domain.RefreshToken
 	resetTokens   map[string]*domain.PasswordResetToken
+	pats          map[string]*domain.PersonalAccessToken
 	activeKey     *domain.SigningKey
 }
 
@@ -30,6 +32,7 @@ func newFakeRepo() *fakeRepo {
 		usersByID:     make(map[uuid.UUID]*domain.User),
 		refreshTokens: make(map[string]*domain.RefreshToken),
 		resetTokens:   make(map[string]*domain.PasswordResetToken),
+		pats:          make(map[string]*domain.PersonalAccessToken),
 	}
 }
 
@@ -163,6 +166,53 @@ func (r *fakeRepo) InsertOutboxEvent(_ context.Context, _, _ uuid.UUID, _ string
 }
 func (r *fakeRepo) WithTransaction(ctx context.Context, fn func(context.Context, domain.Repository) error) error {
 	return fn(ctx, r)
+}
+
+func (r *fakeRepo) CreatePersonalAccessToken(_ context.Context, id, userID uuid.UUID, name, tokenHash, tokenPrefix string, expiresAt time.Time) (*domain.PersonalAccessToken, error) {
+	pat := &domain.PersonalAccessToken{
+		ID: id, UserID: userID, Name: name, TokenHash: tokenHash, TokenPrefix: tokenPrefix,
+		CreatedAt: time.Now(), ExpiresAt: expiresAt,
+	}
+	r.pats[tokenHash] = pat
+	return pat, nil
+}
+
+func (r *fakeRepo) GetPersonalAccessTokenByHash(_ context.Context, hash string) (*domain.PersonalAccessToken, error) {
+	pat, ok := r.pats[hash]
+	if !ok {
+		return nil, domain.ErrTokenInvalid
+	}
+	return pat, nil
+}
+
+func (r *fakeRepo) ListPersonalAccessTokensByUser(_ context.Context, userID uuid.UUID) ([]*domain.PersonalAccessToken, error) {
+	var pats []*domain.PersonalAccessToken
+	for _, pat := range r.pats {
+		if pat.UserID == userID {
+			pats = append(pats, pat)
+		}
+	}
+	return pats, nil
+}
+
+func (r *fakeRepo) RevokePersonalAccessToken(_ context.Context, id, userID uuid.UUID) error {
+	now := time.Now()
+	for _, pat := range r.pats {
+		if pat.ID == id && pat.UserID == userID {
+			pat.RevokedAt = &now
+		}
+	}
+	return nil
+}
+
+func (r *fakeRepo) TouchPersonalAccessTokenLastUsed(_ context.Context, id uuid.UUID) error {
+	now := time.Now()
+	for _, pat := range r.pats {
+		if pat.ID == id {
+			pat.LastUsedAt = &now
+		}
+	}
+	return nil
 }
 
 // testKeyManager holds a pre-generated RSA key pair.
@@ -447,5 +497,126 @@ func TestAuthService_GetUser_NotFound(t *testing.T) {
 	_, err := svc.GetUser(context.Background(), uuid.New())
 	if !errors.Is(err, domain.ErrUserNotFound) {
 		t.Errorf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+// ── Personal Access Tokens ────────────────────────────────────────────────────
+
+func TestAuthService_CreatePAT_HappyPath(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+	user, _ := svc.Register(ctx, "alice@example.com", "Password1!")
+
+	pat, rawToken, err := svc.CreatePAT(ctx, user.ID, "my-mcp-server", 90*24*time.Hour)
+	if err != nil {
+		t.Fatalf("CreatePAT: %v", err)
+	}
+	if rawToken == "" {
+		t.Error("expected non-empty raw token")
+	}
+	if !strings.HasPrefix(rawToken, "tbpat_") {
+		t.Errorf("expected raw token to start with tbpat_, got %q", rawToken)
+	}
+	if pat.TokenHash == rawToken {
+		t.Error("stored hash must not equal the raw token")
+	}
+	if pat.Name != "my-mcp-server" {
+		t.Errorf("Name: want my-mcp-server, got %s", pat.Name)
+	}
+	if !pat.IsValid() {
+		t.Error("expected freshly created PAT to be valid")
+	}
+}
+
+func TestAuthService_ListPATs(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+	user, _ := svc.Register(ctx, "alice@example.com", "Password1!")
+	other, _ := svc.Register(ctx, "bob@example.com", "Password1!")
+
+	_, _, _ = svc.CreatePAT(ctx, user.ID, "token-a", 30*24*time.Hour)
+	_, _, _ = svc.CreatePAT(ctx, user.ID, "token-b", 90*24*time.Hour)
+	_, _, _ = svc.CreatePAT(ctx, other.ID, "not-alices", 30*24*time.Hour)
+
+	pats, err := svc.ListPATs(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListPATs: %v", err)
+	}
+	if len(pats) != 2 {
+		t.Errorf("expected 2 PATs for user, got %d", len(pats))
+	}
+}
+
+func TestAuthService_RevokePAT(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+	user, _ := svc.Register(ctx, "alice@example.com", "Password1!")
+	pat, rawToken, _ := svc.CreatePAT(ctx, user.ID, "my-mcp-server", 90*24*time.Hour)
+
+	if err := svc.RevokePAT(ctx, user.ID, pat.ID); err != nil {
+		t.Fatalf("RevokePAT: %v", err)
+	}
+
+	if _, err := svc.IntrospectPAT(ctx, rawToken); !errors.Is(err, domain.ErrTokenInvalid) {
+		t.Errorf("expected ErrTokenInvalid after revoke, got %v", err)
+	}
+}
+
+func TestAuthService_RevokePAT_WrongUserIsNoop(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+	user, _ := svc.Register(ctx, "alice@example.com", "Password1!")
+	attacker, _ := svc.Register(ctx, "mallory@example.com", "Password1!")
+	pat, rawToken, _ := svc.CreatePAT(ctx, user.ID, "my-mcp-server", 90*24*time.Hour)
+
+	// Revoking someone else's token must not error (idempotent-style API) but
+	// must also not actually revoke it.
+	if err := svc.RevokePAT(ctx, attacker.ID, pat.ID); err != nil {
+		t.Fatalf("RevokePAT: %v", err)
+	}
+
+	if _, err := svc.IntrospectPAT(ctx, rawToken); err != nil {
+		t.Errorf("expected token to still be valid, got %v", err)
+	}
+}
+
+func TestAuthService_IntrospectPAT_HappyPath(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+	user, _ := svc.Register(ctx, "alice@example.com", "Password1!")
+	_, rawToken, _ := svc.CreatePAT(ctx, user.ID, "my-mcp-server", 90*24*time.Hour)
+
+	got, err := svc.IntrospectPAT(ctx, rawToken)
+	if err != nil {
+		t.Fatalf("IntrospectPAT: %v", err)
+	}
+	if got.ID != user.ID {
+		t.Errorf("IntrospectPAT: want user %s, got %s", user.ID, got.ID)
+	}
+}
+
+func TestAuthService_IntrospectPAT_UnknownToken(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	_, err := svc.IntrospectPAT(context.Background(), "tbpat_doesnotexist")
+	if !errors.Is(err, domain.ErrTokenInvalid) {
+		t.Errorf("expected ErrTokenInvalid, got %v", err)
+	}
+}
+
+func TestAuthService_IntrospectPAT_Expired(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	ctx := context.Background()
+	user, _ := svc.Register(ctx, "alice@example.com", "Password1!")
+	_, rawToken, _ := svc.CreatePAT(ctx, user.ID, "my-mcp-server", time.Hour)
+
+	// Backdate expiry directly in the fake store to simulate an expired token.
+	for _, pat := range repo.pats {
+		if pat.UserID == user.ID {
+			pat.ExpiresAt = time.Now().Add(-time.Minute)
+		}
+	}
+
+	if _, err := svc.IntrospectPAT(ctx, rawToken); !errors.Is(err, domain.ErrTokenInvalid) {
+		t.Errorf("expected ErrTokenInvalid for expired PAT, got %v", err)
 	}
 }

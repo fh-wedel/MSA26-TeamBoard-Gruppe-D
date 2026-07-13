@@ -46,6 +46,9 @@ services:
   boardregistry:
     image: ${REGISTRY}/teamboard-boardregistry:${TAG}
 
+  mcp-server:
+    image: ${REGISTRY}/teamboard-mcp-server:${TAG}
+
   frontend:
     image: ${REGISTRY}/teamboard-frontend:${TAG}
     # Serve the SPA via Traefik with the lowest priority, so /api/* and /ws

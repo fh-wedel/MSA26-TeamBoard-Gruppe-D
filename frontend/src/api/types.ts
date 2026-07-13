@@ -249,6 +249,17 @@ export interface Webhook {
   updated_at: string
 }
 
+// ── Personal Access Tokens ────────────────────────────────────────────────────
+export interface PersonalAccessToken {
+  id: string
+  name: string
+  token_prefix: string
+  created_at: string
+  expires_at: string
+  last_used_at?: string
+  revoked_at?: string
+}
+
 export interface WebhookDelivery {
   id: string
   webhook_id: string
