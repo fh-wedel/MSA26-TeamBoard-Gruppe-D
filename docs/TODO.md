@@ -51,7 +51,16 @@ Offen bleibt:
 
 ## 4. Infrastruktur / Deployment
 
-- [ ] **AWS/CDK für `boardregistry`-Service** (RDS-Instanz, ECS-Service, Routing) ergänzen. — `ADR 0001`
+> Das aktuelle Deployment (einzelne EC2-Box, Docker-Compose-Stack, GitHub Actions → GHCR) ist
+> in [`specifications/deployment.md`](specifications/deployment.md) beschrieben. Die folgenden
+> Punkte sind **keine Blocker** — sie betreffen erst das Herauslösen einzelner Bausteine in
+> dedizierte Managed-Services und lohnen sich erst bei entsprechender Last (siehe
+> `deployment.md` §12 Skalierungs-Pfad).
+
+- [ ] **(Niedrige Prio, spätere Erweiterung)** Zustands-Dienste in Managed-AWS-Ressourcen
+  herauslösen (Postgres → RDS, Redis → ElastiCache, MinIO → S3, RabbitMQ → Amazon MQ) und/oder
+  Services auf ECS/Fargate umziehen. Der `boardregistry`-Service **läuft bereits** im
+  gemeinsamen Compose-Stack; ein eigener RDS-/ECS-Split ist optional. — `ADR 0001`, `deployment.md §12`
 
 ## 5. Features (bewusst nicht im MVP)
 
