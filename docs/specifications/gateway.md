@@ -2,10 +2,9 @@
 
 > **Verwandtes Dokument:** [`ARCHITECTURE.md`](../ARCHITECTURE.md) — Master-Architektur  
 > **Komponente:** API Gateway (kein eigener Service mit Code, sondern Konfiguration einer Off-the-Shelf-Komponente)  
-> **Technologie lokal:** Traefik v3.0  
-> **Technologie AWS:** Amazon API Gateway (HTTP API + WebSocket API)  
-> **Port (lokal):** 80 (HTTP), 443 (HTTPS in Produktion)  
-> **Stand:** 2026-05
+> **Technologie:** Traefik v3.0 — **dieselbe** Instanz lokal wie in Produktion (auf der EC2-Box, via `docker-compose.prod.yml`)  
+> **Port:** 80 (HTTP); TLS optional via Let's Encrypt (siehe §4)  
+> **Stand:** 2026-07
 
 ---
 
@@ -21,7 +20,7 @@
 8. [Trace-ID-Initiierung](#8-trace-id-initiierung)
 9. [Authentication am Gateway?](#9-authentication-am-gateway)
 10. [Health-Checks und Service Discovery](#10-health-checks-und-service-discovery)
-11. [AWS-Variante](#11-aws-variante)
+11. [Gateway in Produktion (AWS EC2)](#11-gateway-in-produktion-aws-ec2)
 12. [Observability](#12-observability)
 13. [Implementierungs-Hinweise](#13-implementierungs-hinweise)
 
@@ -52,7 +51,7 @@
 
 ### 1.3 Off-the-Shelf statt Custom
 
-Wir bauen kein eigenes Gateway. Traefik (lokal) und AWS API Gateway (Produktion) sind reife, konfigurierbare Lösungen. Eigenes Gateway in Go würde Wochen kosten und keinen Mehrwert bieten — alle relevanten Features (Routing, TLS, Rate Limit, CORS) sind kommodifiziert.
+Wir bauen kein eigenes Gateway. Traefik ist eine reife, konfigurierbare Off-the-Shelf-Lösung und läuft lokal wie in Produktion identisch. Ein eigenes Gateway in Go würde Wochen kosten und keinen Mehrwert bieten — alle relevanten Features (Routing, TLS, Rate Limit, CORS) sind kommodifiziert.
 
 ### 1.4 Warum Traefik
 
@@ -63,7 +62,7 @@ Wir bauen kein eigenes Gateway. Traefik (lokal) und AWS API Gateway (Produktion)
 | Kong | mächtige Plugin-Architektur | komplexer, eigene DB, overkill für MVP |
 | Envoy | sehr leistungsstark | steile Lernkurve |
 
-Entscheidung: Traefik lokal (Service-Discovery via Labels passt perfekt zu Docker Compose), AWS API Gateway in Produktion (managed, kein Betrieb).
+Entscheidung: Traefik — lokal **und** in Produktion (Service-Discovery via Docker-Labels passt perfekt zum Compose-Stack auf der EC2-Box; eine Konfiguration für beide Umgebungen).
 
 ---
 
@@ -293,11 +292,13 @@ für **alle** gerouteten Services. Die Service-Labels in §3.2 enthalten daher n
 
 Traefik läuft auf Port 80. WSS und HTTPS sind in lokaler Entwicklung nicht nötig.
 
-### 4.2 Produktion: AWS Certificate Manager
+### 4.2 Produktion: aktueller Stand (HTTP)
 
-In AWS übernimmt **AWS Certificate Manager + CloudFront** TLS-Termination. Backend (ECS via API Gateway) sieht nur HTTP. Zertifikat ist kostenlos und auto-renewable.
+Das umgesetzte EC2-Deployment fährt Traefik auf Port 80 **ohne TLS** — presigned URLs und Reset-Links zeigen auf `http://${PUBLIC_HOST}` (siehe [`deployment.md`](deployment.md)). Für eine Demo/MVP-Box hinter einer Elastic IP ausreichend; für einen produktiven Betrieb ist TLS nachzurüsten (§4.3).
 
-### 4.3 Produktion: Let's Encrypt (eigener Server)
+### 4.3 TLS nachrüsten: Let's Encrypt (Traefik ACME)
+
+Da in Produktion dieselbe Traefik-Instanz auf der Box läuft, wird TLS direkt in Traefik terminiert — kein vorgelagerter Managed-Dienst nötig. Domain auf die Elastic IP zeigen lassen, `443` in der Security Group öffnen, dann:
 
 ```yaml
 certificatesResolvers:
@@ -308,6 +309,8 @@ certificatesResolvers:
       httpChallenge:
         entryPoint: web
 ```
+
+Router auf den `websecure`-Entrypoint umstellen und `PUBLIC_HOST`/URLs auf `https://` setzen.
 
 ---
 
@@ -476,105 +479,37 @@ Bei Fehler: Service wird aus Routing entfernt, kein Traffic.
 
 ---
 
-## 11. AWS-Variante
+## 11. Gateway in Produktion (AWS EC2)
 
 ### 11.1 Architektur
 
+In Produktion läuft **dieselbe** Traefik-Instanz wie lokal — als Container auf der EC2-Box, hochgezogen über `docker-compose.prod.yml`. Kein Amazon API Gateway, kein CloudFront, kein zusätzlicher Managed-Dienst. Routing, Rate Limiting, CORS und WebSocket-Pass-through sind damit lokal und in Produktion identisch konfiguriert (dieselben Docker-Labels).
+
 ```
 Browser
-  │ HTTPS
+  │ HTTP (:80)   — Elastic IP der EC2-Box
   ▼
-CloudFront (CDN, optional)
-  │
-  ▼
-AWS WAF (DDoS, SQLi, XSS)
-  │
-  ▼
-Amazon API Gateway
-  ├── HTTP API (REST)
-  └── WebSocket API
-  │
-  ▼ VPC Link
-ECS Services (Fargate)
+Traefik v3.0  (Container auf der Box, Docker-Provider)
+  ├── /api/v1/auth, /.well-known   → auth
+  ├── /api/v1/projects, /boards …  → project
+  ├── /api/v1/tasks, /comments …   → task
+  ├── /api/v1/documents            → document
+  ├── /api/v1/notifications, /ws   → notification
+  ├── /api/v1/webhooks             → plugin
+  ├── /api/v1/board-types          → boardregistry
+  └── /  (priority 1, Fallback)    → frontend (SPA)
 ```
 
-### 11.2 HTTP API (CDK-Skeleton)
+Der einzige prod-spezifische Unterschied gegenüber lokal: das Frontend wird **durch** Traefik ausgeliefert (niedrigste Router-Priorität) statt über einen eigenen Port. Details in [`deployment.md`](deployment.md) §7.
 
-```typescript
-// infra/cdk/lib/api-gateway-stack.ts
+### 11.2 Ingress & TLS
 
-const api = new HttpApi(this, 'TeamBoardApi', {
-  apiName: 'teamboard',
-  corsPreflight: {
-    allowOrigins: ['https://teamboard.example'],
-    allowMethods: [CorsHttpMethod.ANY],
-    allowHeaders: ['*'],
-    allowCredentials: true,
-    maxAge: Duration.hours(1),
-  },
-});
+- **Ports:** `:80` (Traefik) und `:9000` (MinIO, presigned Document-Downloads direkt an den Browser) sind in der Security Group offen; `:22` für SSH-Deploy.
+- **TLS:** aktuell HTTP-only; nachrüstbar direkt in Traefik via Let's Encrypt (§4.3) — kein vorgelagerter ACM/CloudFront nötig.
 
-const authIntegration = new HttpServiceDiscoveryIntegration(
-  'AuthIntegration',
-  authService.cloudMapService,
-);
+### 11.3 Skalierung — Ausblick
 
-api.addRoutes({
-  path: '/api/v1/auth/{proxy+}',
-  methods: [HttpMethod.ANY],
-  integration: authIntegration,
-});
-
-api.addRoutes({
-  path: '/.well-known/jwks.json',
-  methods: [HttpMethod.GET],
-  integration: authIntegration,
-});
-
-// Analog für project, task, document, notification, plugin
-```
-
-### 11.3 WebSocket API
-
-```typescript
-const wsApi = new WebSocketApi(this, 'TeamBoardWsApi', {
-  connectRouteOptions: {
-    integration: new WebSocketLambdaIntegration('Connect', wsConnectFn),
-    authorizer: new WebSocketLambdaAuthorizer('JWTAuth', jwtAuthorizerFn),
-  },
-  disconnectRouteOptions: {
-    integration: new WebSocketLambdaIntegration('Disconnect', wsDisconnectFn),
-  },
-  defaultRouteOptions: {
-    integration: new WebSocketLambdaIntegration('Default', wsMessageFn),
-  },
-});
-```
-
-### 11.4 Rate Limiting in AWS
-
-```typescript
-const stage = new HttpStage(this, 'ProdStage', {
-  httpApi: api,
-  throttle: {
-    rateLimit: 1000,
-    burstLimit: 2000,
-  },
-});
-```
-
-WAF für anspruchsvollere Limits (per IP, Geo-Block, etc.).
-
-### 11.5 Trade-offs
-
-| Aspekt | Traefik (lokal) | AWS API Gateway |
-|--------|-----------------|-----------------|
-| Konfig-Sprache | YAML / Labels | CDK / Terraform |
-| Service Discovery | Docker-Labels | Cloud Map / Service Connect |
-| Skalierung | manuell pro Service | automatisch |
-| Kosten | Container-Resource | Pay-per-Request |
-| WebSockets | nativ pass-through | separate WebSocket API |
-| Ops-Aufwand | Container betreiben | managed |
+Traefik verteilt bereits per Round-Robin über Instanzen desselben Service (`docker compose up --scale task=3`, §10.3). Wächst der Bedarf über eine Box hinaus, bleibt das label-basierte Routing bestehen; getauscht wird nur der Service-Discovery-Provider (z. B. Cloud Map bei einem Umzug auf ECS). Der Skalierungs-Pfad ist in [`deployment.md`](deployment.md) §12 beschrieben — jeder Schritt ersetzt genau eine Kante, kein Rewrite.
 
 ---
 

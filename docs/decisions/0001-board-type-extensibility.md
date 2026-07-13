@@ -61,7 +61,10 @@ Status-Mapping für beliebige Spaltennamen; Project-Service bleibt Owner der Boa
   `board_type_registry_unavailable` 503) im `CreateBoard`-Pfad.
 - **Authz der Schreib-Endpoints** ist aktuell „jeder authentifizierte User"; Beschränkung auf eine
   Admin-/Publisher-Rolle ist Folgearbeit.
-- **AWS/CDK** für den neuen Service (RDS, ECS) ist als Folgearbeit zu ergänzen.
+- Der Service ist bereits als Container im gemeinsamen EC2-/Compose-Deployment ausgerollt
+  (siehe `docs/specifications/deployment.md`). Ein Herauslösen in dedizierte Managed-Ressourcen
+  (eigene RDS-Instanz, ECS-Service) ist **optionale, niedrig priorisierte** Folgearbeit für den
+  Skalierungsfall, kein Blocker.
 
 ## Referenzen
 - `docs/services/boardregistry.md`

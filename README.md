@@ -13,7 +13,7 @@ und Webhook-Integrationen. Umgesetzt als Microservice-System nach Domain-Driven 
 ## Tech-Stack
 
 Go 1.22+ · Chi-Router · sqlc · PostgreSQL 16 · Redis 7 · RabbitMQ 3.12 ·
-Docker Compose · Traefik · React/TypeScript (Frontend) · AWS ECS Fargate (Prod-Ziel).
+Docker Compose · Traefik · React/TypeScript (Frontend) · GitHub Actions · AWS EC2 (Prod).
 
 ---
 
@@ -110,7 +110,7 @@ Vollständige Befehlsliste: `make help`.
 │                           #   outbox, observability, httputil, servicetoken)
 ├── frontend/               # React/TypeScript SPA
 ├── docs/                   # ARCHITECTURE.md, decisions/ (ADRs), services/, specifications/
-├── infra/                  # Traefik (lokal) + AWS CDK
+├── infra/                  # Traefik-Config (lokal + Prod)
 └── scripts/                # seed.py, wait-healthy.py, …
 ```
 
@@ -122,4 +122,5 @@ Vollständige Befehlsliste: `make help`.
 - [`docs/decisions/`](docs/decisions) — Architecture Decision Records (Board-Typ- & View-Extensibility)
 - [`docs/services/`](docs/services) — Detail pro Service: DB-Schema, OpenAPI, Use-Cases, Test-Strategie
 - [`docs/specifications/`](docs/specifications) — Coding-Guidelines, Shared-Libs, Orchestrierung, Gateway
+- [`docs/specifications/deployment.md`](docs/specifications/deployment.md) — CI/CD-Pipeline (GitHub Actions → GHCR) und AWS-EC2-Deployment
 - [`docs/demo/`](docs/demo) — Notebooks (Board-Typen zur Laufzeit, Webhooks)
