@@ -292,25 +292,33 @@ für **alle** gerouteten Services. Die Service-Labels in §3.2 enthalten daher n
 
 Traefik läuft auf Port 80. WSS und HTTPS sind in lokaler Entwicklung nicht nötig.
 
-### 4.2 Produktion: aktueller Stand (HTTP)
+### 4.2 Produktion: TLS via Let's Encrypt (sslip.io)
 
-Das umgesetzte EC2-Deployment fährt Traefik auf Port 80 **ohne TLS** — presigned URLs und Reset-Links zeigen auf `http://${PUBLIC_HOST}` (siehe [`deployment.md`](deployment.md)). Für eine Demo/MVP-Box hinter einer Elastic IP ausreichend; für einen produktiven Betrieb ist TLS nachzurüsten (§4.3).
+Das EC2-Deployment terminiert echtes, öffentlich vertrautes TLS auf `:443` — direkt in Traefik, kein vorgelagerter Managed-Dienst. HTTP auf `:80` bleibt zusätzlich erreichbar (presigned MinIO-URLs und Reset-Links zeigen weiterhin auf `http://${PUBLIC_HOST}`).
 
-### 4.3 TLS nachrüsten: Let's Encrypt (Traefik ACME)
+**Problem:** Let's Encrypt stellt keine Zertifikate für nackte IPs aus. **Lösung:** ein Wildcard-DNS-Hostname, der die Elastic IP kodiert:
 
-Da in Produktion dieselbe Traefik-Instanz auf der Box läuft, wird TLS direkt in Traefik terminiert — kein vorgelagerter Managed-Dienst nötig. Domain auf die Elastic IP zeigen lassen, `443` in der Security Group öffnen, dann:
-
-```yaml
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: ops@teamboard.example
-      storage: /letsencrypt/acme.json
-      httpChallenge:
-        entryPoint: web
+```
+${PUBLIC_HOST}.sslip.io   ->  löst öffentlich auf ${PUBLIC_HOST} auf
 ```
 
-Router auf den `websecure`-Entrypoint umstellen und `PUBLIC_HOST`/URLs auf `https://` setzen.
+Für diesen Hostnamen holt Traefik ein Zertifikat und löst die **ACME-TLS-ALPN-01**-Challenge selbst auf `:443`. TLS-ALPN-01 (nicht HTTP-01) ist bewusst gewählt: sie läuft auf der TLS-Ebene und berührt kein HTTP-Routing — kann also nicht vom `PathPrefix(/.well-known)`-Router des Auth-Service abgefangen werden.
+
+Die ACME-Statik wird **prod-only** als `TRAEFIK_*`-Env-Variablen in [`docker-compose.prod.yml`](../../docker-compose.prod.yml) eingespielt (lokal bleibt `:443` self-signed und versucht keine Ausstellung); `acme.json` liegt auf einem benannten Volume (`traefik-acme`), überlebt Redeploys und bleibt so unter den LE-Rate-Limits:
+
+```yaml
+traefik:
+  environment:
+    TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_EMAIL: "stud106022@fh-wedel.de"
+    TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_STORAGE: "/acme/acme.json"
+    TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_TLSCHALLENGE: "true"
+    TRAEFIK_ENTRYPOINTS_websecure_HTTP_TLS_CERTRESOLVER: "letsencrypt"
+    TRAEFIK_ENTRYPOINTS_websecure_HTTP_TLS_DOMAINS_0_MAIN: "${PUBLIC_HOST}.sslip.io"
+  volumes:
+    - traefik-acme:/acme
+```
+
+**Zugriff:** App und MCP-Endpoint über `https://${PUBLIC_HOST}.sslip.io/` aufrufen. Die SPA nutzt relative URLs und die Settings-Seite leitet die MCP-URL vom aktuellen Hostnamen ab — beide übernehmen das gültige Zertifikat automatisch. (Die nackte IP auf `:443` liefert weiterhin Traefiks self-signed Default-Cert.)
 
 ---
 

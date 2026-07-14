@@ -38,12 +38,15 @@ entryPoints:
         - ratelimit@file
   websecure:
     address: ":443"
-    # Terminate TLS for every router attached to this entrypoint. With no
-    # certResolver configured, Traefik serves its built-in self-signed default
-    # certificate — enough for a self-hosted box reached by IP (local or EC2),
-    # where public-CA issuance (Let's Encrypt needs a domain) isn't available.
-    # To upgrade to a real cert later: point a domain at the box, add an ACME
-    # certResolver here, and set `tls.certResolver` on the routers.
+    # Terminate TLS for every router attached to this entrypoint.
+    #
+    # Locally (this file only): no certResolver, so Traefik serves its built-in
+    # self-signed default cert — fine for a box reached by bare IP.
+    #
+    # In production the ACME resolver + cert domain are layered on via TRAEFIK_*
+    # env vars in docker-compose.prod.yml (Let's Encrypt for ${PUBLIC_HOST}.sslip.io,
+    # TLS-ALPN-01 challenge). That merges into this same `tls` block at runtime, so
+    # the deployed box gets a real, publicly-trusted cert on :443. See that file.
     http:
       tls: {}
       middlewares:

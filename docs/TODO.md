@@ -26,7 +26,9 @@ Offen bleibt:
 - [ ] **Optionale Gateway-Middlewares:** separates strengeres `auth-rate-limit` nur für
   `/api/v1/auth/*`, `body-limit` (Request-Buffering), CORS-Origin-**Regex**-Liste statt
   fester Origins. — `gateway.md §3.4` (Note)
-- [ ] **TLS-Termination:** lokal nur HTTP; in AWS via API Gateway / ACM.
+- [x] ~~**TLS-Termination:** lokal nur HTTP; in AWS via API Gateway / ACM.~~ — erledigt:
+  echtes Let's-Encrypt-Zertifikat direkt in Traefik auf `:443` für `${PUBLIC_HOST}.sslip.io`
+  (TLS-ALPN-01, prod-only via `TRAEFIK_*`-Env in `docker-compose.prod.yml`). Siehe `gateway.md §4.2`.
 
 ## 2. Tests & Coverage (`shared/go` ≥ 90 %)
 
