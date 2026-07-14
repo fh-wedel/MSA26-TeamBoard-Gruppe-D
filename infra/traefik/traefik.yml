@@ -40,16 +40,40 @@ entryPoints:
     address: ":443"
     # Terminate TLS for every router attached to this entrypoint.
     #
-    # Locally (this file only): no certResolver, so Traefik serves its built-in
-    # self-signed default cert — fine for a box reached by bare IP.
-    #
-    # In production the ACME resolver + cert domain are layered on via TRAEFIK_*
-    # env vars in docker-compose.prod.yml (Let's Encrypt for ${PUBLIC_HOST}.sslip.io,
-    # TLS-ALPN-01 challenge). That merges into this same `tls` block at runtime, so
-    # the deployed box gets a real, publicly-trusted cert on :443. See that file.
+    # With no matching ACME cert, Traefik serves its built-in self-signed default
+    # cert (what you get locally, or via the bare IP in prod). In production the
+    # `letsencrypt` resolver below is *activated* by the `acme` router that
+    # docker-compose.prod.yml attaches to the frontend service: its Host()
+    # matcher (${PUBLIC_HOST}.sslip.io) is what makes Traefik request a cert.
+    # The issued cert is then served for that SNI on this entrypoint.
     http:
       tls: {}
       middlewares:
         - secure-headers@file
         - cors@file
         - ratelimit@file
+
+# Let's Encrypt certificate resolver.
+#
+# Defined here in the static file on purpose: a resolver added via CLI flags or
+# TRAEFIK_* env vars does NOT work reliably once this file is present — the file
+# takes precedence over CLI flags for static config, and env vars mangle the
+# resolver's name so routers can't reference it. The file is the only reliable
+# home for it.
+#
+# It is INERT unless a router references it (`tls.certresolver: letsencrypt`).
+# Locally no router does, so Traefik never contacts Let's Encrypt — :443 just
+# serves the self-signed default cert. In production the `acme` router from
+# docker-compose.prod.yml activates it (see that file).
+#
+# storage lives on a writable volume (traefik-acme -> /acme, mounted by the
+# compose file); the directory must exist or the resolver is skipped at startup.
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: stud106022@fh-wedel.de
+      storage: /acme/acme.json
+      # TLS-ALPN-01: solved on :443 at the TLS layer, so it never collides with
+      # the auth service's PathPrefix(`/.well-known`) HTTP router. Requires :443
+      # reachable from the internet (it is, via the EC2 security group).
+      tlsChallenge: {}

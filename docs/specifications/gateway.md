@@ -304,21 +304,35 @@ ${PUBLIC_HOST}.sslip.io   ->  löst öffentlich auf ${PUBLIC_HOST} auf
 
 Für diesen Hostnamen holt Traefik ein Zertifikat und löst die **ACME-TLS-ALPN-01**-Challenge selbst auf `:443`. TLS-ALPN-01 (nicht HTTP-01) ist bewusst gewählt: sie läuft auf der TLS-Ebene und berührt kein HTTP-Routing — kann also nicht vom `PathPrefix(/.well-known)`-Router des Auth-Service abgefangen werden.
 
-Die ACME-Statik wird **prod-only** als `TRAEFIK_*`-Env-Variablen in [`docker-compose.prod.yml`](../../docker-compose.prod.yml) eingespielt (lokal bleibt `:443` self-signed und versucht keine Ausstellung); `acme.json` liegt auf einem benannten Volume (`traefik-acme`), überlebt Redeploys und bleibt so unter den LE-Rate-Limits:
+Die Konfiguration verteilt sich auf zwei Stellen — das ist Absicht, weil Traefik ACME-Config nur so zuverlässig übernimmt:
 
-```yaml
-traefik:
-  environment:
-    TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_EMAIL: "stud106022@fh-wedel.de"
-    TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_STORAGE: "/acme/acme.json"
-    TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_TLSCHALLENGE: "true"
-    TRAEFIK_ENTRYPOINTS_websecure_HTTP_TLS_CERTRESOLVER: "letsencrypt"
-    TRAEFIK_ENTRYPOINTS_websecure_HTTP_TLS_DOMAINS_0_MAIN: "${PUBLIC_HOST}.sslip.io"
-  volumes:
-    - traefik-acme:/acme
-```
+1. **Resolver-Definition** in der statischen Datei [`infra/traefik/traefik.yml`](../../infra/traefik/traefik.yml). Sie **muss** in der Datei stehen: Ein per CLI-Flag definierter Resolver wird ignoriert, sobald eine Config-Datei vorhanden ist (Datei schlägt CLI), und per `TRAEFIK_*`-Env-Variable geht der Resolver-*Name* verloren, sodass ihn kein Router referenzieren kann.
 
-**Zugriff:** App und MCP-Endpoint über `https://${PUBLIC_HOST}.sslip.io/` aufrufen. Die SPA nutzt relative URLs und die Settings-Seite leitet die MCP-URL vom aktuellen Hostnamen ab — beide übernehmen das gültige Zertifikat automatisch. (Die nackte IP auf `:443` liefert weiterhin Traefiks self-signed Default-Cert.)
+   ```yaml
+   certificatesResolvers:
+     letsencrypt:
+       acme:
+         email: stud106022@fh-wedel.de
+         storage: /acme/acme.json
+         tlsChallenge: {}
+   ```
+
+   Der Resolver ist **inert**, solange kein Router ihn referenziert — lokal bleibt `:443` daher self-signed und es wird nie Kontakt zu Let's Encrypt aufgenommen. `acme.json` liegt auf dem Volume `traefik-acme` (`/acme`) und überlebt Redeploys, bleibt also unter den LE-Rate-Limits.
+
+2. **Aktivierung** durch einen `acme`-Router in [`docker-compose.prod.yml`](../../docker-compose.prod.yml) (prod-only). Traefik leitet die anzufordernde Domain **ausschließlich aus Routern** ab (aus `Host()`/`HostSNI()` oder router-seitigem `tls.domains`) — *nicht* aus Entrypoint-TLS-Config. Der `Host()`-Matcher ist also der eigentliche Auslöser; der spezielle Pfad sorgt dafür, dass der Router keinen echten Traffic abfängt:
+
+   ```yaml
+   frontend:
+     labels:
+       - "traefik.http.routers.acme.rule=Host(`${PUBLIC_HOST}.sslip.io`) && PathPrefix(`/.well-known/acme-marker`)"
+       - "traefik.http.routers.acme.entrypoints=websecure"
+       - "traefik.http.routers.acme.tls.certresolver=letsencrypt"
+       - "traefik.http.routers.acme.service=frontend"
+   ```
+
+   Sobald ausgestellt, liegt das Zertifikat im gemeinsamen Store und wird für diese SNI auf **allen** `:443`-Routern ausgeliefert.
+
+**Zugriff:** App und MCP-Endpoint über `https://${PUBLIC_HOST}.sslip.io/` aufrufen. Die SPA nutzt relative URLs und die Settings-Seite leitet die MCP-URL vom aktuellen Hostnamen ab — beide übernehmen das gültige Zertifikat automatisch. (Die nackte IP **oder** der AWS-Default-Hostname `ec2-…​.compute.amazonaws.com` auf `:443` liefern weiterhin Traefiks self-signed Default-Cert, weil das Zertifikat nur für den sslip.io-Namen gilt — daher genau diesen Hostnamen verwenden.)
 
 ---
 

@@ -10,6 +10,10 @@ volumes:
   redis-data:
   rabbitmq-data:
   minio-data:
+  # ACME/Let's Encrypt storage for Traefik (account key + issued certs). Only
+  # written in production, but declared here so /acme exists in every environment
+  # — otherwise the resolver defined in traefik.yml is skipped at startup.
+  traefik-acme:
 
 services:
   # =========================================================
@@ -170,6 +174,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./infra/traefik:/etc/traefik:ro
+      # Persist the Let's Encrypt account key + issued certs (prod). Inert locally.
+      - traefik-acme:/acme
     networks:
       - teamboard-net
 

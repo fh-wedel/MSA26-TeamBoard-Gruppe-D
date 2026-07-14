@@ -15,39 +15,7 @@
 #   PUBLIC_HOST  — Elastic IP                 (auto-derived, or set in .env)
 # App secrets (POSTGRES_PASSWORD, …) come from /opt/teamboard/.env.
 
-volumes:
-  # Persist the Let's Encrypt account key + issued certs across restarts/redeploys
-  # so we never re-request on every deploy and stay well under LE rate limits.
-  traefik-acme:
-
 services:
-  # Real, publicly-trusted TLS on :443 via Let's Encrypt.
-  #
-  # Let's Encrypt does not issue certificates for a bare IP, so we use a
-  # wildcard-DNS hostname that encodes the Elastic IP:
-  #     ${PUBLIC_HOST}.sslip.io   ->  resolves to ${PUBLIC_HOST}   (public DNS)
-  # Traefik requests a cert for that hostname and solves the ACME TLS-ALPN-01
-  # challenge on :443 itself. TLS-ALPN-01 (not HTTP-01) is deliberate: it runs at
-  # the TLS layer and never touches HTTP routing, so it can't be swallowed by the
-  # auth service's `PathPrefix(/.well-known)` router.
-  #
-  # Reach the app + MCP endpoint via  https://${PUBLIC_HOST}.sslip.io/  — the SPA
-  # uses relative URLs and the Settings page derives the MCP URL from the current
-  # hostname, so both pick up the valid cert automatically. (The bare IP on :443
-  # still serves Traefik's self-signed default cert — use the hostname.)
-  #
-  # ACME static config is injected as TRAEFIK_* env vars (prod-only) so local dev
-  # keeps its self-signed :443 and never attempts issuance.
-  traefik:
-    environment:
-      TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_EMAIL: "stud106022@fh-wedel.de"
-      TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_STORAGE: "/acme/acme.json"
-      TRAEFIK_CERTIFICATESRESOLVERS_letsencrypt_ACME_TLSCHALLENGE: "true"
-      TRAEFIK_ENTRYPOINTS_websecure_HTTP_TLS_CERTRESOLVER: "letsencrypt"
-      TRAEFIK_ENTRYPOINTS_websecure_HTTP_TLS_DOMAINS_0_MAIN: "${PUBLIC_HOST}.sslip.io"
-    volumes:
-      - traefik-acme:/acme
-
   auth:
     image: ${REGISTRY}/teamboard-auth:${TAG}
     environment:
@@ -90,3 +58,15 @@ services:
       - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
       - "traefik.http.routers.frontend.priority=1"
       - traefik.http.services.frontend.loadbalancer.server.port=3000
+      # ACME trigger. Let's Encrypt won't issue for a bare IP, so we use a
+      # wildcard-DNS host that encodes the Elastic IP: ${PUBLIC_HOST}.sslip.io
+      # resolves to ${PUBLIC_HOST}. This router's Host() matcher is what tells
+      # Traefik which domain to request a cert for (resolver `letsencrypt` is
+      # defined in infra/traefik/traefik.yml). The specific /.well-known/acme-marker
+      # path means it never intercepts real traffic — it exists solely to declare
+      # the cert domain. Once issued, the cert is served for this SNI on every :443
+      # router, so reach the app + MCP via https://${PUBLIC_HOST}.sslip.io/.
+      - "traefik.http.routers.acme.rule=Host(`${PUBLIC_HOST}.sslip.io`) && PathPrefix(`/.well-known/acme-marker`)"
+      - "traefik.http.routers.acme.entrypoints=websecure"
+      - "traefik.http.routers.acme.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.acme.service=frontend"
