@@ -162,17 +162,45 @@ export default function SettingsPage() {
 
   const tokens = data?.data ?? []
 
+  const [copiedUrl, setCopiedUrl] = useState(false)
+  const copyUrl = async () => {
+    await navigator.clipboard.writeText(mcpUrl())
+    setCopiedUrl(true)
+    setTimeout(() => setCopiedUrl(false), 2000)
+  }
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="mb-8">
         <h1 className="text-lg font-semibold text-text-0">Settings</h1>
       </div>
 
+      {/* OAuth connector — the easy path for Claude Desktop: add a URL, then a
+          browser window opens to authorize with your TeamBoard login. */}
+      <div className="mb-10">
+        <h2 className="text-sm font-semibold text-text-0">Connect to Claude</h2>
+        <p className="text-xs text-text-2 mt-0.5 mb-3">
+          In Claude Desktop, add a <span className="font-medium">custom connector</span> with this URL. A
+          browser window opens where you sign in with your TeamBoard account — no token to copy.
+        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <code className="input-base flex-1 text-xs break-all select-all">{mcpUrl()}</code>
+          <button type="button" onClick={copyUrl}
+            className="btn-ghost flex-shrink-0 flex items-center gap-1.5">
+            {copiedUrl ? <Check size={14} /> : <Copy size={14} />}
+            {copiedUrl ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+        <p className="text-xs text-text-3">
+          Claude Desktop → Settings → Connectors → Add custom connector → paste the URL → Authorize.
+        </p>
+      </div>
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-sm font-semibold text-text-0">Personal access tokens</h2>
           <p className="text-xs text-text-2 mt-0.5">
-            Let external tools (like an MCP server) read your projects, boards and tasks on your behalf.
+            For Claude Code (CLI) or other tools that use a bearer token instead of the browser sign-in above.
           </p>
         </div>
         <button onClick={() => setShowCreateModal(true)}

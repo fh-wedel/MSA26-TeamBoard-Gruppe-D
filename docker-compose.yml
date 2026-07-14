@@ -226,7 +226,7 @@ services:
       start_period: 30s
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`) || PathPrefix(`/.well-known`) || Path(`/auth`) || PathPrefix(`/auth/`)"
+      - "traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`) || PathPrefix(`/.well-known`) || PathPrefix(`/oauth`) || Path(`/auth`) || PathPrefix(`/auth/`)"
       - traefik.http.services.auth.loadbalancer.server.port=8001
     networks:
       - teamboard-net

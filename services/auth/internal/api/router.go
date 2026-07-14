@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/teamboard/services/auth/internal/domain"
 	"github.com/teamboard/shared/go/servicetoken"
@@ -26,8 +27,9 @@ func NewHandlers(svc domain.AuthService, repo domain.Repository, pool *pgxpool.P
 }
 
 // NewRouter wires the Chi router with all routes and middleware.
-func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Pool, issuer, audience string, stVerifier servicetoken.Verifier) http.Handler {
+func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Pool, rdb *redis.Client, issuer, audience string, stVerifier servicetoken.Verifier) http.Handler {
 	h := NewHandlers(svc, repo, pool)
+	oauth := NewOAuthHandlers(svc, rdb)
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.RequestID)
@@ -40,6 +42,18 @@ func NewRouter(svc domain.AuthService, repo domain.Repository, pool *pgxpool.Poo
 
 	// JWKS
 	r.Get("/.well-known/jwks.json", h.JWKS)
+
+	// OAuth 2.1 authorization server for the MCP "add a URL + browser Authorize"
+	// flow (no manual tokens). All public; the gateway routes /.well-known and
+	// /oauth to this service. See internal/api/oauth.go.
+	r.Get("/.well-known/oauth-authorization-server", oauth.ASMetadata)
+	r.Get("/.well-known/oauth-protected-resource", oauth.PRMetadata)
+	r.Route("/oauth", func(r chi.Router) {
+		r.Post("/register", oauth.Register)
+		r.Get("/authorize", oauth.AuthorizeForm)
+		r.Post("/authorize", oauth.AuthorizeSubmit)
+		r.Post("/token", oauth.Token)
+	})
 
 	// Public API documentation (OpenAPI spec + Swagger UI), no auth.
 	mountDocs(r)

@@ -143,7 +143,7 @@ func run() error {
 
 	// HTTP server
 	stVerifier := servicetoken.NewVerifier(cfg.ServiceTokenSecret, "internal")
-	router := api.NewRouter(svc, repo, pool, cfg.Issuer, cfg.Audience, stVerifier)
+	router := api.NewRouter(svc, repo, pool, redisClient, cfg.Issuer, cfg.Audience, stVerifier)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HTTPPort),
 		Handler:      router,

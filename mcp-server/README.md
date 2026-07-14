@@ -15,7 +15,15 @@ on both `:80` and `:443`. It is **multi-tenant**: each request carries the calle
 `Authorization` header, so one running instance serves everyone — nobody needs to build or run a
 local binary. This is what deploys to the EC2 box.
 
-Create a token in **Settings → Personal access tokens**, then:
+**Claude Desktop (easiest — browser sign-in, no token):** add a **custom connector** with the URL
+`https://<host>/mcp`. Claude discovers the OAuth authorization server (the auth service implements
+the [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization):
+protected-resource + authorization-server metadata, Dynamic Client Registration, and an
+authorization-code + PKCE flow), opens a browser window where you sign in with your TeamBoard
+account, and stores the issued token itself. No personal access token required.
+
+For **Claude Code** (CLI), or any client that authenticates with a static bearer header, use a
+Personal Access Token instead. Create one in **Settings → Personal access tokens**, then:
 
 **Claude Code** (one command — the dialog gives you this pre-filled):
 

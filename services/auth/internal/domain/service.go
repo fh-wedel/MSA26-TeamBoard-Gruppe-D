@@ -25,6 +25,15 @@ type AuthService interface {
 	// IntrospectPAT validates a raw token and returns its owning user. Used by
 	// the internal introspection endpoint other services call.
 	IntrospectPAT(ctx context.Context, rawToken string) (*User, error)
+
+	// AuthenticateForOAuth verifies email+password and returns the user WITHOUT
+	// issuing tokens. Used by the OAuth authorization endpoint's login step
+	// (the browser consent screen). Applies the same rate limit as Login.
+	AuthenticateForOAuth(ctx context.Context, email, password string) (*User, error)
+	// IssueTokensForUser mints a fresh access+refresh token pair for an
+	// already-authenticated user. Used by the OAuth token endpoint after a valid
+	// authorization-code exchange.
+	IssueTokensForUser(ctx context.Context, userID uuid.UUID) (*TokenPair, error)
 }
 
 // Repository is the persistence interface consumed by the domain layer.

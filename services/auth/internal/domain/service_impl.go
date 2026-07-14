@@ -293,6 +293,45 @@ func (s *service) IntrospectPAT(ctx context.Context, rawToken string) (*User, er
 	return user, nil
 }
 
+// AuthenticateForOAuth verifies credentials for the OAuth authorization flow's
+// login step, without issuing tokens. Mirrors Login's timing-safe checks and
+// rate limit, but the caller (OAuth authorize handler) mints the code instead.
+func (s *service) AuthenticateForOAuth(ctx context.Context, email, password string) (*User, error) {
+	allowed, err := s.limiter.Allow(ctx, "login:"+email, 5, 15*time.Minute)
+	if err != nil {
+		slog.WarnContext(ctx, "rate limiter error, failing open", "error", err)
+	} else if !allowed {
+		return nil, ErrRateLimited
+	}
+
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		// Timing-safe: still run Argon2 even for unknown emails.
+		argon2.IDKey([]byte(password), dummySalt, argon2Iterations, argon2Memory, argon2Parallelism, argon2KeyLen)
+		s.recordAttempt(ctx, email, false, nil, nil)
+		return nil, ErrInvalidCredentials
+	}
+	if !VerifyPassword(password, user.PasswordHash) {
+		s.recordAttempt(ctx, email, false, nil, nil)
+		return nil, ErrInvalidCredentials
+	}
+
+	s.recordAttempt(ctx, email, true, nil, nil)
+	return user, nil
+}
+
+// IssueTokensForUser mints an access+refresh pair for an already-authenticated
+// user (OAuth authorization-code exchange). The access token is a standard
+// TeamBoard session JWT, so it is accepted unchanged by the gateway, the domain
+// services, and the MCP server.
+func (s *service) IssueTokensForUser(ctx context.Context, userID uuid.UUID) (*TokenPair, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+	return s.issuePair(ctx, user, nil, nil)
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 func (s *service) issuePair(ctx context.Context, user *User, ip, userAgent interface{}) (*TokenPair, error) {
