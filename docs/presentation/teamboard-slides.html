@@ -1,0 +1,1048 @@
+<title>TeamBoard — Präsentation</title>
+<style>
+  :root{
+    --bg:#0C1620; --bg2:#10202C; --panel:#122531;
+    --ink:#DCE7EC; --dim:#8AA0AC; --faint:#5E7784;
+    --line:rgba(70,196,208,.24); --line-soft:rgba(70,196,208,.12);
+    --accent:#46C4D0; --accent-ink:#0C1620; --amber:#E2A33C;
+    --good:#4FB477; --bad:#E06B6B; --warn:#E2A33C; --blue:#5B9BD5; --slate:#7C93A0;
+    --grid:rgba(70,196,208,.06);
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"SFMono-Regular",Menlo,monospace;
+    --sans:system-ui,"Segoe UI",-apple-system,Roboto,"Helvetica Neue",sans-serif;
+  }
+  @media (prefers-color-scheme:light){
+    :root{
+      --bg:#E7ECEC; --bg2:#F4F6F5; --panel:#FFFFFF;
+      --ink:#0F2028; --dim:#4C626C; --faint:#7A8E97;
+      --line:rgba(14,140,154,.28); --line-soft:rgba(14,140,154,.14);
+      --accent:#0E8C9A; --accent-ink:#FFFFFF; --amber:#B9791A;
+      --good:#2E7D50; --bad:#C0443E; --warn:#B9791A; --blue:#3F72A8; --slate:#5C7480;
+      --grid:rgba(14,140,154,.07);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0C1620; --bg2:#10202C; --panel:#122531;
+    --ink:#DCE7EC; --dim:#8AA0AC; --faint:#5E7784;
+    --line:rgba(70,196,208,.24); --line-soft:rgba(70,196,208,.12);
+    --accent:#46C4D0; --accent-ink:#0C1620; --amber:#E2A33C;
+    --good:#4FB477; --bad:#E06B6B; --warn:#E2A33C; --blue:#5B9BD5; --slate:#7C93A0;
+    --grid:rgba(70,196,208,.06);
+  }
+  :root[data-theme="light"]{
+    --bg:#E7ECEC; --bg2:#F4F6F5; --panel:#FFFFFF;
+    --ink:#0F2028; --dim:#4C626C; --faint:#7A8E97;
+    --line:rgba(14,140,154,.28); --line-soft:rgba(14,140,154,.14);
+    --accent:#0E8C9A; --accent-ink:#FFFFFF; --amber:#B9791A;
+    --good:#2E7D50; --bad:#C0443E; --warn:#B9791A; --blue:#3F72A8; --slate:#5C7480;
+    --grid:rgba(14,140,154,.07);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+
+  #wrap{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden;
+    background:var(--bg);
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:32px 32px;}
+  #stage{width:1280px;height:720px;position:relative;transform-origin:center center;
+    background:var(--bg);border:1px solid var(--line);
+    box-shadow:0 40px 120px rgba(0,0,0,.45);
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:40px 40px;}
+
+  .slide{position:absolute;inset:0;padding:56px 68px 64px;opacity:0;visibility:hidden;
+    transition:opacity .35s ease;display:flex;flex-direction:column}
+  .slide.active{opacity:1;visibility:visible}
+  @media (prefers-reduced-motion:reduce){.slide{transition:none}}
+
+  /* ---- shared type ---- */
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--accent);display:flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--accent)}
+  h1.title{font-size:40px;font-weight:750;letter-spacing:-.02em;line-height:1.05;margin:12px 0 0;
+    text-wrap:balance;max-width:22ch}
+  .lead{color:var(--dim);font-size:17px;line-height:1.5;max-width:60ch}
+  .head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+  .time{font-family:var(--mono);font-size:12.5px;color:var(--faint);letter-spacing:.08em;white-space:nowrap;padding-top:6px}
+  .star{color:var(--amber)}
+  .body{flex:1;min-height:0;margin-top:28px}
+
+  ul.ticks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+  ul.ticks li{position:relative;padding-left:24px;font-size:16.5px;line-height:1.4;color:var(--ink)}
+  ul.ticks li::before{content:"";position:absolute;left:0;top:9px;width:9px;height:9px;
+    border:1.5px solid var(--accent);transform:rotate(45deg)}
+  ul.ticks li b{color:var(--ink);font-weight:700}
+  .sub{color:var(--dim);font-size:15px;line-height:1.45}
+  .klabel{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:34px;height:100%}
+  .col{display:flex;flex-direction:column;gap:16px;min-height:0}
+
+  .card{border:1px solid var(--line);background:var(--bg2);padding:20px 22px;position:relative}
+  .card .ct{position:absolute;width:9px;height:9px;border-color:var(--accent);opacity:.6}
+  .card h3{margin:0 0 10px;font-size:15px;font-family:var(--mono);letter-spacing:.06em;
+    text-transform:uppercase;color:var(--accent)}
+  .card.amber h3{color:var(--amber)}
+
+  .mono{font-family:var(--mono)}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;
+    letter-spacing:.04em;padding:4px 10px;border:1px solid var(--line);color:var(--dim)}
+  .pill .dot{width:8px;height:8px;border-radius:50%}
+
+  /* corner ticks on panels */
+  .tk{position:relative}
+  .tk::before,.tk::after{content:"";position:absolute;width:8px;height:8px;pointer-events:none}
+  .tk::before{left:-1px;top:-1px;border-left:2px solid var(--accent);border-top:2px solid var(--accent)}
+  .tk::after{right:-1px;bottom:-1px;border-right:2px solid var(--accent);border-bottom:2px solid var(--accent)}
+
+  /* chrome */
+  .chrome{position:absolute;inset:0;pointer-events:none}
+  .rail{position:absolute;top:0;left:0;right:0;height:4px;display:flex;gap:2px;padding:0}
+  .rail .seg{flex:1;background:var(--line-soft)}
+  .rail .seg.on{background:var(--accent)}
+  .rail .seg.done{background:var(--line)}
+  .foot{position:absolute;left:68px;right:68px;bottom:26px;display:flex;justify-content:space-between;
+    align-items:center;font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.08em}
+  .foot .sec{text-transform:uppercase}
+  .foot .nav{pointer-events:auto;display:flex;align-items:center;gap:16px}
+  .foot .nav button{pointer-events:auto;background:none;border:1px solid var(--line);color:var(--dim);
+    font-family:var(--mono);font-size:13px;width:30px;height:26px;cursor:pointer}
+  .foot .nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .foot .nav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .count b{color:var(--ink)}
+
+  /* diagram helpers */
+  svg .fill-bg2{fill:var(--bg2)} svg .fill-panel{fill:var(--panel)}
+  svg text{font-family:var(--mono);fill:var(--ink)}
+  svg .lbl{font-size:13px} svg .lbl-sm{font-size:11px;fill:var(--dim)}
+  svg .lbl-t{font-family:var(--sans);font-weight:700}
+  svg .stroke-line{stroke:var(--line);fill:none} svg .stroke-acc{stroke:var(--accent);fill:none}
+
+  /* service tiles grid (slide 10 etc) */
+  .panels{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;height:100%}
+  .panel{border:1px solid var(--line);background:var(--bg2);display:flex;flex-direction:column}
+  .panel .ph{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:baseline}
+  .panel .ph .nm{font-weight:750;font-size:19px} .panel .ph .pt{font-family:var(--mono);font-size:13px;color:var(--accent)}
+  .panel .pb{padding:16px 18px;display:flex;flex-direction:column;gap:11px;flex:1}
+  .panel .pb .row{font-size:14.5px;line-height:1.35;padding-left:16px;position:relative;color:var(--ink)}
+  .panel .pb .row::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;background:var(--accent)}
+  .panel .dep{margin-top:auto;font-family:var(--mono);font-size:11.5px;color:var(--faint);
+    border-top:1px dashed var(--line);padding-top:10px}
+
+  .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .prin{border:1px solid var(--line);background:var(--bg2);padding:14px 12px;min-height:104px;
+    display:flex;flex-direction:column;justify-content:center;text-align:center;gap:5px}
+  .prin.disc{border-color:var(--amber);background:color-mix(in srgb,var(--amber) 9%,var(--bg2))}
+  .prin .pn{font-weight:700;font-size:14px;line-height:1.2} .prin .pd{font-family:var(--mono);font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+
+  table.tb{border-collapse:collapse;width:100%;font-size:15px}
+  table.tb th{background:var(--panel);color:var(--accent);font-family:var(--mono);font-size:12px;
+    letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:12px 14px;border:1px solid var(--line)}
+  table.tb td{padding:12px 14px;border:1px solid var(--line);vertical-align:middle}
+  table.tb td.k{font-weight:700} table.tb tr:nth-child(even) td{background:var(--bg2)}
+
+  .flow{display:flex;flex-direction:column;gap:0}
+  .flow .step{border:1px solid var(--line);background:var(--bg2);padding:11px 16px;font-size:14.5px;
+    display:flex;align-items:center;gap:12px}
+  .flow .step .n{font-family:var(--mono);font-size:12px;color:var(--accent);min-width:18px}
+  .flow .arr{height:16px;width:2px;background:var(--line);margin-left:26px}
+  .flow .arr::after{content:"▾";position:relative;left:-5px;top:8px;color:var(--faint)}
+
+  .quad{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px;height:100%}
+  .qc{border:1px solid var(--line);background:var(--bg2);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+  .qc h4{margin:0;font-family:var(--mono);font-size:13px;letter-spacing:.04em;color:var(--accent)}
+  .qc .qi{font-size:13.5px;line-height:1.35;padding-left:15px;position:relative;color:var(--ink)}
+  .qc .qi::before{content:"";position:absolute;left:0;top:7px;width:6px;height:6px;border:1.4px solid var(--accent);transform:rotate(45deg)}
+
+  .band{border:1px solid var(--amber);background:color-mix(in srgb,var(--amber) 10%,var(--bg2));
+    padding:13px 18px;font-size:14.5px;color:var(--ink)}
+  .band b{color:var(--amber)}
+
+  .split2{display:grid;grid-template-columns:1fr 1fr;gap:24px;height:100%}
+  .goodbox{border:1px solid var(--good);background:color-mix(in srgb,var(--good) 8%,var(--bg2));padding:20px 22px}
+  .badbox{border:1px solid var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--bg2));padding:20px 22px}
+  .goodbox h3{color:var(--good)} .badbox h3{color:var(--bad)}
+  .goodbox h3,.badbox h3{margin:0 0 14px;font-size:17px;font-family:var(--sans);font-weight:750}
+
+  .term{background:#08131A;border:1px solid var(--line);padding:18px 20px;font-family:var(--mono);font-size:15px}
+  .term .g{color:#7EE0A6} .term .c{color:#5E7784}
+  :root[data-theme="light"] .term{background:#0A1922;color:#DCE7EC}
+  @media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .term{background:#0A1922;color:#DCE7EC}}
+
+  .checks{display:flex;flex-direction:column;gap:9px}
+  .checks .c{font-size:15px;padding-left:26px;position:relative;line-height:1.35}
+  .checks .c::before{position:absolute;left:0;top:0;font-family:var(--mono);font-weight:700}
+  .checks .c.y::before{content:"✓";color:var(--good)}
+  .checks .c.n::before{content:"◦";color:var(--faint)}
+  .checks .c.n{color:var(--dim)}
+
+  /* title slide */
+  #s1{padding:0;justify-content:center}
+  .hero{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 84px}
+  .hero .wm{font-size:96px;font-weight:800;letter-spacing:-.035em;line-height:.92;margin:0}
+  .hero .wm .b{color:var(--accent)}
+  .hero .sub2{font-size:22px;color:var(--dim);margin:18px 0 0;max-width:44ch;line-height:1.4}
+  .hero .meta{margin-top:44px;font-family:var(--mono);font-size:13.5px;color:var(--faint);
+    letter-spacing:.06em;line-height:1.9}
+  .hero .team{color:var(--amber)}
+  .hero-svg{position:absolute;right:64px;top:0;bottom:0;width:44%;opacity:.5;pointer-events:none}
+
+  .demo-frame{flex:1;border:1.5px dashed var(--line);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:20px;text-align:center;background:var(--bg2)}
+  .demo-frame .play{font-size:34px;font-weight:800;color:var(--accent);letter-spacing:.02em}
+  .demo-frame ul{max-width:60ch}
+
+  /* notes drawer */
+  #notes{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:2px solid var(--accent);
+    padding:16px 26px 18px;transform:translateY(101%);transition:transform .3s ease;z-index:50;
+    box-shadow:0 -14px 40px rgba(0,0,0,.4);max-height:42vh;overflow:auto}
+  body.notes #notes{transform:none}
+  #notes .nh{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+  #notes .nt{font-size:15px;line-height:1.5;color:var(--ink);max-width:120ch}
+  #hint{position:fixed;right:14px;top:12px;font-family:var(--mono);font-size:11px;color:var(--faint);
+    letter-spacing:.05em;z-index:40;text-align:right;line-height:1.7;opacity:.85}
+  #hint b{color:var(--accent)}
+
+  @media print{
+    @page{size:13.333in 7.5in;margin:0}
+    #wrap{position:static;display:block;overflow:visible;background:#fff}
+    #stage{transform:none!important;width:1280px;height:720px;box-shadow:none;border:none}
+    .slide{position:relative;opacity:1;visibility:visible;page-break-after:always;inset:auto}
+    #notes,#hint,.foot .nav{display:none}
+  }
+</style>
+
+<div id="wrap">
+<div id="stage">
+
+<!-- ============ 1 · TITLE ============ -->
+<section class="slide active" id="s1" data-sec="0">
+  <svg class="hero-svg" viewBox="0 0 400 620" fill="none" aria-hidden="true">
+    <g class="stroke-line" stroke-width="1">
+      <rect x="60" y="40" width="120" height="40"/><rect x="230" y="40" width="110" height="40"/>
+      <rect x="40" y="150" width="320" height="34"/>
+      <rect x="40" y="240" width="70" height="52"/><rect x="130" y="240" width="70" height="52"/>
+      <rect x="220" y="240" width="70" height="52"/><rect x="60" y="330" width="70" height="52"/>
+      <rect x="150" y="330" width="70" height="52"/><rect x="240" y="330" width="70" height="52"/>
+      <rect x="40" y="430" width="150" height="40"/><rect x="210" y="430" width="150" height="40"/>
+    </g>
+    <g class="stroke-acc" stroke-width="1.3">
+      <path d="M120 80 V150 M285 80 V150"/>
+      <path d="M120 184 V240 M165 184 V240 M255 184 V240 M95 240 V330 Q95 300 100 292"/>
+      <path d="M115 470 V520 M285 470 V520"/>
+    </g>
+    <circle cx="120" cy="150" r="3" fill="var(--accent)"/><circle cx="255" cy="240" r="3" fill="var(--accent)"/>
+    <circle cx="185" cy="330" r="3" fill="var(--amber)"/>
+  </svg>
+  <div class="hero">
+    <div class="eyebrow">Moderne Softwarearchitekturen · SS 2026</div>
+    <h1 class="wm">Team<span class="b">Board</span></h1>
+    <p class="sub2">Web-basierte Kollaborationsplattform — komponentenbasiertes Microservice-System.</p>
+    <div class="meta">
+      FH WEDEL · M.SC. · PROF. DR. HOFFMANN<br>
+      <span class="team">TEAM · [NAME 1] · [NAME 2] · [NAME 3] · [NAME 4]</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 · AGENDA ============ -->
+<section class="slide" id="s2" data-sec="0">
+  <div class="head-row"><div><div class="eyebrow">Ablauf</div><h1 class="title">Agenda</h1></div><div class="time">0:30</div></div>
+  <div class="body">
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
+      <!-- items -->
+    </div>
+    <div id="agenda-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px"></div>
+    <p class="lead" style="margin-top:30px;color:var(--accent);font-weight:600">
+      Zwei inhaltliche Schwerpunkte: die KI-Reflexion und die Erweiterbarkeits-Architektur.</p>
+  </div>
+</section>
+
+<!-- ============ 3 · KONTEXT ============ -->
+<section class="slide" id="s3" data-sec="0">
+  <div class="head-row"><div><div class="eyebrow">Einleitung</div><h1 class="title">Kontext &amp; Motivation</h1></div><div class="time">1:30</div></div>
+  <div class="body two">
+    <div class="col" style="justify-content:center">
+      <svg viewBox="0 0 520 300" width="100%" aria-hidden="true">
+        <text x="0" y="18" class="lbl-t" font-size="15" fill="var(--dim)">Ausgangslage — fragmentiert</text>
+        <g class="stroke-line" stroke-width="1.2">
+          <rect x="20" y="40" width="120" height="52"/><rect x="200" y="40" width="120" height="52"/>
+          <rect x="20" y="150" width="120" height="52"/><rect x="200" y="150" width="120" height="52"/>
+        </g>
+        <g stroke="var(--bad)" stroke-width="1.3" opacity=".7">
+          <path d="M150 70 L330 175 M150 175 L330 70" stroke-dasharray="5 5"/>
+        </g>
+        <text x="34" y="71" class="lbl-sm">Aufgaben</text><text x="214" y="71" class="lbl-sm">Dateien</text>
+        <text x="34" y="181" class="lbl-sm">Chat</text><text x="214" y="181" class="lbl-sm">Kalender</text>
+      </svg>
+    </div>
+    <div class="col" style="justify-content:center">
+      <svg viewBox="0 0 520 300" width="100%" aria-hidden="true">
+        <text x="0" y="18" class="lbl-t" font-size="15" fill="var(--accent)">TeamBoard — konsolidiert</text>
+        <g class="stroke-acc" stroke-width="1.3">
+          <path d="M260 150 L120 70 M260 150 L400 70 M260 150 L90 175 M260 150 L430 175 M260 150 L260 250"/>
+        </g>
+        <circle cx="260" cy="150" r="30" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="240" y="154" class="lbl" font-size="11">Core</text>
+        <g class="fill-bg2" stroke="var(--line)" stroke-width="1">
+          <rect x="80" y="48" width="80" height="30"/><rect x="360" y="48" width="90" height="30"/>
+          <rect x="46" y="160" width="90" height="30"/><rect x="386" y="160" width="90" height="30"/>
+          <rect x="212" y="238" width="96" height="30"/>
+        </g>
+        <text x="90" y="67" class="lbl-sm">Boards</text><text x="370" y="67" class="lbl-sm">Tasks</text>
+        <text x="52" y="179" class="lbl-sm">Dokumente</text><text x="392" y="179" class="lbl-sm">Notifs</text>
+        <text x="224" y="257" class="lbl-sm">Projekte</text>
+      </svg>
+    </div>
+  </div>
+  <ul class="ticks" style="position:absolute;left:68px;right:68px;bottom:70px;flex-direction:row;gap:26px">
+    <li style="flex:1"><b>Fokus laut Aufgabe:</b> skalierbare, komponentenbasierte Architektur — nicht Feature-Fülle</li>
+    <li style="flex:1"><b>Leitfragen:</b> Echtzeit-Events verteilen · unabhängig skalieren · Datenkonsistenz</li>
+    <li style="flex:.7"><b>MVP</b> als roter Faden</li>
+  </ul>
+</section>
+
+<!-- ============ 4 · TEAM ============ -->
+<section class="slide" id="s4" data-sec="0">
+  <div class="head-row"><div><div class="eyebrow">Einleitung</div><h1 class="title">Team &amp; Aufgabenverteilung</h1></div><div class="time">1:00</div></div>
+  <div class="body" style="display:grid;grid-template-columns:1.75fr 1fr;gap:26px">
+    <table class="tb">
+      <tr><th>Person</th><th>Schwerpunkt</th><th>Services / Bereich</th></tr>
+      <tr><td class="k mono">[Name]</td><td>Auth &amp; Gateway, Zero-Trust</td><td>Auth · Traefik · authmiddleware</td></tr>
+      <tr><td class="k mono">[Name]</td><td>Domänen-Kern</td><td>Project (Permissions) · Task</td></tr>
+      <tr><td class="k mono">[Name]</td><td>Storage &amp; Realtime</td><td>Document · Notification</td></tr>
+      <tr><td class="k mono">[Name]</td><td>Erweiterbarkeit &amp; Frontend</td><td>Board Registry · Plugin · React-SPA</td></tr>
+    </table>
+    <div class="card amber tk" style="align-self:start">
+      <h3>KI im Projekt</h3>
+      <p style="margin:0 0 12px;font-size:16px;line-height:1.45">Opus 4.7 durchgängig als Pair-Partner:
+        <b class="mono" style="color:var(--amber)">Entwurf → Code → Doku</b>.</p>
+      <p class="sub" style="margin:0">Deklariert eingesetzt — Reflexion in Kap. 4.</p>
+    </div>
+  </div>
+  <p class="sub" style="position:absolute;left:68px;bottom:64px">Schnitt entlang der Bounded Contexts · Querschnitt (shared libs, Event-Schema, Deployment) gemeinsam.</p>
+</section>
+
+<!-- ============ 5 · INTERPRETATION ============ -->
+<section class="slide" id="s5" data-sec="1">
+  <div class="head-row"><div><div class="eyebrow">Projektbeschreibung</div><h1 class="title">Interpretation der Aufgabenstellung</h1></div><div class="time">1:30</div></div>
+  <div class="body two">
+    <div class="col">
+      <div class="card tk" style="flex:1">
+        <h3>Lastenheft — Original</h3>
+        <ul class="ticks" style="margin-top:6px">
+          <li>Projekte / Boards · Tasks (Status, Zuweisung, Fälligkeit)</li>
+          <li>Kommentare · Dokumente mit Versionierung</li>
+          <li>Echtzeit-Benachrichtigungen</li>
+          <li>Plugin-Architektur · API für Fremdsysteme</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="klabel">Unsere Lesart →</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1">
+        <div class="card tk" style="display:flex;align-items:center;justify-content:center;text-align:center"><b style="font-size:18px">MVP zuerst</b></div>
+        <div class="card tk" style="display:flex;align-items:center;justify-content:center;text-align:center"><b style="font-size:18px">Architektur vor Features</b></div>
+        <div class="card tk" style="display:flex;align-items:center;justify-content:center;text-align:center"><b style="font-size:18px">Erweiterbarkeit first-class</b></div>
+        <div class="card tk" style="display:flex;align-items:center;justify-content:center;text-align:center"><b style="font-size:18px">API-first &amp; JSON</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6 · ANFORDERUNGEN ============ -->
+<section class="slide" id="s6" data-sec="1">
+  <div class="head-row"><div><div class="eyebrow">Projektbeschreibung</div><h1 class="title">Anforderungen</h1></div><div class="time">1:30</div></div>
+  <div class="body two">
+    <div class="col">
+      <div class="klabel">Funktional</div>
+      <ul class="ticks">
+        <li>Projekt-/Board-Verwaltung mit Rollen</li>
+        <li>Kanban-Tasks: Status, Zuweisung, Fälligkeit, Kommentare, Anhänge</li>
+        <li>Dokumentenablage + Versionierung</li>
+        <li>Echtzeit-Benachrichtigungen (WebSocket)</li>
+        <li>Webhook-Integrationen · erweiterbare Board-Typen</li>
+      </ul>
+    </div>
+    <div class="col">
+      <div class="klabel" style="color:var(--amber)">Nichtfunktional — der eigentliche Kern</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <span class="pill"><span class="dot" style="background:var(--amber)"></span>Zero-Trust → JWT je Service</span>
+        <span class="pill"><span class="dot" style="background:var(--amber)"></span>Horizontale Skalierbarkeit / Stateless</span>
+        <span class="pill"><span class="dot" style="background:var(--amber)"></span>Eventual Consistency</span>
+        <span class="pill"><span class="dot" style="background:var(--amber)"></span>Erweiterbarkeit ohne Redeploy</span>
+        <span class="pill"><span class="dot" style="background:var(--amber)"></span>Observability</span>
+        <span class="pill"><span class="dot" style="background:var(--amber)"></span>Resilienz: Timeout / Retry / Circuit-Breaker</span>
+      </div>
+      <p class="sub" style="margin-top:6px">Jede NFR ist im Entwurf verankert — sie tragen das Architektur-Modul, nicht die Feature-Liste.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7 · USER STORIES ============ -->
+<section class="slide" id="s7" data-sec="1">
+  <div class="head-row"><div><div class="eyebrow">Projektbeschreibung</div><h1 class="title">User Stories</h1></div><div class="time">1:00</div></div>
+  <div class="body">
+    <div class="klabel" style="margin-bottom:16px">Als … möchte ich … damit …</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+      <div class="card tk"><span class="mono" style="color:var(--accent);font-size:12px">STORY 01</span><p style="margin:8px 0 0;font-size:16px;line-height:1.4">Projektleiter legt Board an und lädt Mitglieder mit Rollen ein.</p></div>
+      <div class="card tk" style="border-color:var(--amber)"><span class="mono" style="color:var(--amber);font-size:12px">STORY 02 · DEMO</span><p style="margin:8px 0 0;font-size:16px;line-height:1.4">Teammitglied verschiebt Task von „In Arbeit“ nach „Erledigt“.</p></div>
+      <div class="card tk"><span class="mono" style="color:var(--accent);font-size:12px">STORY 03</span><p style="margin:8px 0 0;font-size:16px;line-height:1.4">Autor hängt eine Datei-Version an einen Task.</p></div>
+      <div class="card tk"><span class="mono" style="color:var(--accent);font-size:12px">STORY 04</span><p style="margin:8px 0 0;font-size:16px;line-height:1.4">Nutzer erhält live eine Benachrichtigung bei @Mention.</p></div>
+    </div>
+    <div class="card tk" style="margin-top:16px"><span class="mono" style="color:var(--dim);font-size:12px">INTEGRATOR</span>
+      <span style="font-size:15px;margin-left:12px">CI-Pipeline registriert Webhook auf <span class="mono" style="color:var(--accent)">task.status.changed</span>.</span></div>
+  </div>
+</section>
+
+<!-- ============ 8 · ARCHITEKTUR ⭐ ============ -->
+<section class="slide" id="s8" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Entwurf</div><h1 class="title">Architektur-Überblick</h1></div><div class="time">2:30</div></div>
+  <div class="body" style="display:grid;grid-template-columns:1fr;">
+    <svg viewBox="0 0 1150 470" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <!-- top -->
+      <rect x="60" y="6" width="360" height="46" class="fill-bg2 stroke-acc" stroke-width="1.3"/>
+      <text x="90" y="34" class="lbl">Browser · React-SPA</text>
+      <rect x="730" y="6" width="360" height="46" class="fill-bg2 stroke-line" stroke-width="1.2"/>
+      <text x="760" y="34" class="lbl">Externe Systeme (Webhooks)</text>
+      <!-- gateway band -->
+      <rect x="60" y="86" width="1030" height="46" fill="color-mix(in srgb,var(--accent) 12%,var(--bg2))" stroke="var(--accent)" stroke-width="1.4"/>
+      <text x="90" y="114" class="lbl" fill="var(--accent)">Traefik Gateway</text>
+      <text x="300" y="114" class="lbl-sm">Rate-Limit · CORS · Security-Header · Routing · Trace-ID</text>
+      <!-- services -->
+      <g font-size="12">
+        <!-- 7 tiles -->
+        <g class="fill-panel stroke-line" stroke-width="1.1">
+          <rect x="60"  y="176" width="132" height="66"/><rect x="204" y="176" width="132" height="66"/>
+          <rect x="348" y="176" width="132" height="66"/><rect x="492" y="176" width="132" height="66"/>
+          <rect x="636" y="176" width="132" height="66"/><rect x="780" y="176" width="132" height="66"/>
+          <rect x="924" y="176" width="166" height="66"/>
+        </g>
+        <rect x="204" y="176" width="132" height="66" fill="none" stroke="var(--amber)" stroke-width="1.6"/>
+        <g class="lbl-t" font-size="13.5" fill="var(--ink)">
+          <text x="74"  y="205">Auth</text><text x="218" y="205">Project</text>
+          <text x="362" y="205">Task</text><text x="506" y="205">Document</text>
+          <text x="650" y="205">Notif.</text><text x="794" y="205">Plugin</text>
+          <text x="938" y="205">Board&#8209;Registry</text>
+        </g>
+        <g class="lbl-sm">
+          <text x="74"  y="228">:8001 · JWKS</text><text x="218" y="228" fill="var(--amber)">:8002 · Authority</text>
+          <text x="362" y="228">:8003</text><text x="506" y="228">:8004</text>
+          <text x="650" y="228">:8005 · WS</text><text x="794" y="228">:8006</text>
+          <text x="938" y="228">:8007</text>
+        </g>
+      </g>
+      <!-- infra band -->
+      <g class="fill-bg2 stroke-line" stroke-width="1.1">
+        <rect x="60" y="300" width="240" height="50"/><rect x="312" y="300" width="240" height="50"/>
+        <rect x="564" y="300" width="286" height="50"/><rect x="862" y="300" width="228" height="50"/>
+      </g>
+      <g class="lbl"><text x="86" y="330">PostgreSQL</text><text x="338" y="330">Redis</text>
+        <text x="590" y="330">RabbitMQ · teamboard.events</text><text x="888" y="330">MinIO / S3</text></g>
+      <g class="lbl-sm"><text x="86" y="345" fill="var(--dim)">DB-per-Service</text>
+        <text x="338" y="345" fill="var(--dim)">Cache · Backplane</text>
+        <text x="590" y="345" fill="var(--dim)">topic exchange</text>
+        <text x="888" y="345" fill="var(--dim)">Objektspeicher</text></g>
+      <!-- connectors -->
+      <path d="M240 52 V86" stroke="var(--accent)" stroke-width="1.4" fill="none"/>
+      <g stroke="var(--line)" stroke-width="1" fill="none">
+        <path d="M126 132 V176"/><path d="M270 132 V176"/><path d="M414 132 V176"/>
+        <path d="M558 132 V176"/><path d="M702 132 V176"/><path d="M846 132 V176"/><path d="M1007 132 V176"/>
+      </g>
+      <path d="M414 242 V300" stroke="var(--line)" stroke-width="1" fill="none"/>
+      <path d="M270 242 V300" stroke="var(--line)" stroke-width="1" fill="none"/>
+      <!-- event (dashed amber) task->rabbit -->
+      <path d="M420 242 C 500 275, 640 270, 690 300" stroke="var(--amber)" stroke-width="1.4" fill="none" stroke-dasharray="6 5"/>
+      <!-- ws dotted notif->browser -->
+      <path d="M702 176 C 702 120, 340 110, 240 52" stroke="var(--accent)" stroke-width="1.4" fill="none" stroke-dasharray="2 5"/>
+      <!-- legend -->
+      <g transform="translate(60,398)" font-size="12">
+        <line x1="0" y1="12" x2="40" y2="12" stroke="var(--ink)" stroke-width="1.4"/><text x="48" y="16" class="lbl-sm">synchron / HTTP</text>
+        <line x1="210" y1="12" x2="250" y2="12" stroke="var(--amber)" stroke-width="1.4" stroke-dasharray="6 5"/><text x="258" y="16" class="lbl-sm">asynchron / Event</text>
+        <line x1="420" y1="12" x2="460" y2="12" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="2 5"/><text x="468" y="16" class="lbl-sm">WebSocket</text>
+        <text x="640" y="16" class="lbl-sm" fill="var(--amber)">★ Project = autoritative Permission-Quelle</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<!-- ============ 9 · LEITPRINZIPIEN ============ -->
+<section class="slide" id="s9" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow">Entwurf</div><h1 class="title">Leitprinzipien der Architektur</h1></div><div class="time">1:30</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:16px">
+    <div class="grid5">
+      <div class="prin"><div class="pn">Domain-Driven Design</div></div>
+      <div class="prin"><div class="pn">Database-per-Service</div></div>
+      <div class="prin disc"><div class="pn">Async-First</div><div class="pd">Trade-off</div></div>
+      <div class="prin"><div class="pn">Stateless</div></div>
+      <div class="prin"><div class="pn">Smart Endpoints, Dumb Pipes</div></div>
+      <div class="prin"><div class="pn">API-first · OpenAPI/AsyncAPI</div></div>
+      <div class="prin disc"><div class="pn">Eventual Consistency · Outbox</div><div class="pd">Trade-off</div></div>
+      <div class="prin"><div class="pn">Idempotente Event-Handler</div></div>
+      <div class="prin"><div class="pn">Resilience by Design</div></div>
+      <div class="prin disc"><div class="pn">Security in Depth · Zero-Trust</div><div class="pd">Trade-off</div></div>
+    </div>
+    <p class="lead" style="margin-top:8px"><b style="color:var(--ink)">Trade-offs:</b> Zero-Trust = jeder Service validiert JWT selbst (mehr Redundanz, kein implizites Netz-Vertrauen). Async-First = lose Kopplung, aber Eventual Consistency aushalten. Abweichungen nur per <span class="mono" style="color:var(--accent)">ADR</span>.</p>
+  </div>
+</section>
+
+<!-- ============ 10 · FOUNDATION ============ -->
+<section class="slide" id="s10" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow">Entwurf · Komponenten</div><h1 class="title">Auth · Task · Document — Foundation</h1></div><div class="time">2:00</div></div>
+  <div class="body panels">
+    <div class="panel"><div class="ph"><span class="nm">Auth</span><span class="pt">:8001</span></div>
+      <div class="pb"><div class="row">Registrierung / Login</div><div class="row">RS256-JWT (Access + Refresh)</div>
+        <div class="row">JWKS-Endpoint — Vertrauensanker</div>
+        <div class="row mono" style="font-size:12.5px">user.registered / deleted</div>
+        <div class="dep">hängt ab von: nur eigene DB</div></div></div>
+    <div class="panel"><div class="ph"><span class="nm">Task</span><span class="pt">:8003</span></div>
+      <div class="pb"><div class="row">Task-CRUD im Board</div><div class="row">Statusübergänge, Kommentare, Anhang-Refs</div>
+        <div class="row">Permission-Check vor jedem Schreiben</div>
+        <div class="row mono" style="font-size:12.5px">task.created/assigned/status.changed</div>
+        <div class="dep">hängt ab von: + Project (Authz)</div></div></div>
+    <div class="panel"><div class="ph"><span class="nm">Document</span><span class="pt">:8004</span></div>
+      <div class="pb"><div class="row">Metadaten + Versionierung</div>
+        <div class="row">Bytes per Pre-signed URL direkt Client↔MinIO</div>
+        <div class="row">Storage läuft an den Services vorbei</div>
+        <div class="row mono" style="font-size:12.5px">document.uploaded / version.created</div>
+        <div class="dep">hängt ab von: + Project (Authz)</div></div></div>
+  </div>
+</section>
+
+<!-- ============ 11 · PROJECT AUTHORITY ⭐ ============ -->
+<section class="slide" id="s11" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Entwurf · Komponente</div><h1 class="title">Project — Permission Authority</h1></div><div class="time">2:00</div></div>
+  <div class="body" style="display:grid;grid-template-columns:1.15fr .85fr;gap:28px">
+    <svg viewBox="0 0 560 400" width="100%" aria-hidden="true">
+      <!-- callers -->
+      <g class="fill-bg2 stroke-line" stroke-width="1.1" font-size="12">
+        <rect x="0" y="20" width="120" height="34"/><rect x="0" y="90" width="120" height="34"/>
+        <rect x="0" y="160" width="120" height="34"/><rect x="0" y="230" width="120" height="34"/>
+      </g>
+      <g class="lbl"><text x="16" y="42">Task</text><text x="16" y="112">Document</text>
+        <text x="16" y="182">Notification</text><text x="16" y="252">Plugin</text></g>
+      <!-- arrows to project with lock -->
+      <g stroke="var(--accent)" stroke-width="1.3" fill="none">
+        <path d="M120 37 L250 140"/><path d="M120 107 L250 155"/>
+        <path d="M120 177 L250 172"/><path d="M120 247 L250 190"/>
+      </g>
+      <g fill="var(--amber)" font-size="12"><text x="150" y="80">🔒</text><text x="150" y="140">🔒</text></g>
+      <text x="126" y="300" class="lbl-sm" fill="var(--accent)">GET /internal/…/permissions/{userId}</text>
+      <text x="126" y="316" class="lbl-sm">Service-Token · HS256 · aud:internal</text>
+      <!-- project core -->
+      <rect x="250" y="120" width="170" height="90" fill="color-mix(in srgb,var(--amber) 12%,var(--bg2))" stroke="var(--amber)" stroke-width="1.6"/>
+      <text x="268" y="150" class="lbl-t" font-size="15" fill="var(--ink)">Project :8002</text>
+      <text x="268" y="172" class="lbl-sm">projects · boards</text>
+      <text x="268" y="188" class="lbl-sm">members · roles</text>
+      <!-- redis cache -->
+      <rect x="250" y="250" width="170" height="46" class="fill-bg2 stroke-line" stroke-width="1.2"/>
+      <text x="268" y="270" class="lbl">Redis-Cache</text><text x="268" y="286" class="lbl-sm">Permission · TTL 30 s</text>
+      <path d="M335 210 V250" stroke="var(--line)" stroke-width="1"/>
+      <!-- invalidation -->
+      <path d="M540 273 H420" stroke="var(--amber)" stroke-width="1.3" fill="none" stroke-dasharray="6 5"/>
+      <text x="430" y="320" class="lbl-sm" fill="var(--amber)">project.member.* → invalidieren</text>
+    </svg>
+    <div class="col">
+      <div class="card tk"><h3>Rollen-Matrix</h3>
+        <table class="tb" style="font-size:13.5px"><tr><th>Rolle</th><th>Rechte</th></tr>
+          <tr><td class="k">Owner</td><td>full</td></tr>
+          <tr><td class="k">Editor</td><td>Tasks + Docs full · Rest read</td></tr>
+          <tr><td class="k">Viewer</td><td>read</td></tr></table></div>
+      <ul class="ticks">
+        <li>Einzige <b>autoritative Quelle</b> für Berechtigungen</li>
+        <li>Synchron nur, wenn der Nutzer sofort eine Antwort braucht</li>
+        <li>Project = Owner der Board-<i>Instanzen</i> (≠ Board-Typen der Registry)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · NOTIFICATION ⭐ ============ -->
+<section class="slide" id="s12" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Entwurf · Komponente</div><h1 class="title">Notification — Realtime &amp; bewusst Stateful</h1></div><div class="time">2:00</div></div>
+  <div class="body" style="display:grid;grid-template-columns:1.2fr .8fr;gap:28px">
+    <svg viewBox="0 0 560 400" width="100%" aria-hidden="true">
+      <!-- clients -->
+      <g class="fill-bg2 stroke-line" stroke-width="1.1" font-size="11">
+        <rect x="20" y="10" width="90" height="30"/><rect x="130" y="10" width="90" height="30"/>
+        <rect x="340" y="10" width="90" height="30"/><rect x="450" y="10" width="90" height="30"/>
+      </g>
+      <g class="lbl-sm"><text x="34" y="30">Client A</text><text x="144" y="30">Client B</text>
+        <text x="354" y="30">Client C</text><text x="464" y="30">Client D</text></g>
+      <!-- ws dotted -->
+      <g stroke="var(--accent)" stroke-width="1.3" fill="none" stroke-dasharray="2 5">
+        <path d="M65 40 V110"/><path d="M175 40 V110"/><path d="M385 40 V110"/><path d="M495 40 V110"/></g>
+      <!-- instances -->
+      <rect x="20" y="110" width="200" height="60" class="fill-panel stroke-acc" stroke-width="1.4"/>
+      <rect x="340" y="110" width="200" height="60" class="fill-panel stroke-acc" stroke-width="1.4"/>
+      <text x="40" y="138" class="lbl">Notif · Instanz 1</text><text x="40" y="156" class="lbl-sm">:8005</text>
+      <text x="360" y="138" class="lbl">Notif · Instanz 2</text><text x="360" y="156" class="lbl-sm">:8005</text>
+      <!-- backplane -->
+      <rect x="120" y="210" width="320" height="44" fill="color-mix(in srgb,var(--accent) 12%,var(--bg2))" stroke="var(--accent)" stroke-width="1.4"/>
+      <text x="150" y="237" class="lbl" fill="var(--accent)">Redis Pub/Sub — Backplane</text>
+      <g stroke="var(--accent)" stroke-width="1.2" fill="none">
+        <path d="M120 170 L200 210"/><path d="M440 170 L360 210"/></g>
+      <!-- rabbit -->
+      <rect x="120" y="300" width="200" height="46" class="fill-bg2 stroke-line" stroke-width="1.2"/>
+      <text x="138" y="322" class="lbl">RabbitMQ</text><text x="138" y="338" class="lbl-sm" fill="var(--amber)">task.* · project.* · document.*</text>
+      <path d="M170 300 L150 254" stroke="var(--amber)" stroke-width="1.3" fill="none" stroke-dasharray="6 5"/>
+      <!-- db -->
+      <rect x="360" y="300" width="180" height="46" class="fill-bg2 stroke-line" stroke-width="1.2"/>
+      <text x="378" y="322" class="lbl">DB · notifications</text><text x="378" y="338" class="lbl-sm">persistent · @Mentions</text>
+    </svg>
+    <div class="col">
+      <ul class="ticks">
+        <li>Einzige bewusst <b>zustandsbehaftete</b> Komponente — offene WS-Verbindungen</li>
+        <li><b>Kernproblem:</b> Event trifft Instanz A, User hängt an Instanz B</li>
+        <li><b>Lösung:</b> Redis-Backplane verteilt an alle → jede pusht ihre lokalen Connections</li>
+        <li>Vor dem Push Filter gegen Project-Permissions — <b>kein Leak</b></li>
+        <li>Persistente Notifications zusätzlich in DB (REST)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · PLUGIN PIPELINE ⭐ ============ -->
+<section class="slide" id="s13" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Entwurf · Komponente</div><h1 class="title">Plugin / Webhook — Delivery-Pipeline</h1></div><div class="time">2:00</div></div>
+  <div class="body two">
+    <div class="col">
+      <div class="flow">
+        <div class="step"><span class="n">01</span> RabbitMQ-Event</div><div class="arr"></div>
+        <div class="step"><span class="n">02</span> Idempotenz-Check · <span class="mono" style="color:var(--dim)">processed_events</span></div><div class="arr"></div>
+        <div class="step"><span class="n">03</span> Webhook-Matching · project_id + event_filter</div><div class="arr"></div>
+        <div class="step"><span class="n">04</span> INSERT <span class="mono" style="color:var(--dim)">webhook_deliveries</span> (pending)</div><div class="arr"></div>
+        <div class="step"><span class="n">05</span> Delivery-Worker · Poll 1 s · <span class="mono" style="color:var(--accent)">FOR UPDATE SKIP LOCKED</span></div><div class="arr"></div>
+        <div class="step"><span class="n">06</span> HTTP POST → Update (delivered / failed)</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card tk"><h3>Design: DB als Queue &amp; Audit-Log</h3>
+        <ul class="ticks" style="margin-top:4px">
+          <li>Kein separater Job-Broker — eine Persistenz</li>
+          <li>Volle SQL-Abfragbarkeit · Multi-Worker-safe (SKIP LOCKED)</li>
+          <li>Volles Event-Envelope gespeichert → Retry ist autonom</li>
+        </ul>
+      </div>
+      <div class="card tk"><h3>Delivery-Header</h3>
+        <div class="mono" style="font-size:13px;line-height:1.9;color:var(--dim)">
+          X-TeamBoard-Event<br>X-TeamBoard-Delivery-Id<br>
+          X-TeamBoard-Signature<br>X-TeamBoard-Timestamp</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · PLUGIN RESILIENZ ⭐ ============ -->
+<section class="slide" id="s14" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Entwurf · Komponente</div><h1 class="title">Plugin — Resilienz, Sicherheit &amp; Erweiterung</h1></div><div class="time">2:00</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px">
+    <div class="quad" style="flex:1">
+      <div class="qc"><h4>1 · Retry / Backoff</h4>
+        <div class="mono" style="font-size:12px;color:var(--accent)">30s → 2m → 10m → 30m → 2h → 6h → 24h</div>
+        <div class="qi">±20 % Jitter · max. ~33 h → DLQ</div>
+        <div class="qi">Sofort-DLQ: 410 Gone, harte 4xx (außer 408/425/429)</div></div>
+      <div class="qc"><h4>2 · Circuit Breaker</h4>
+        <div class="mono" style="font-size:12.5px;color:var(--ink)">Closed —[5×]→ Open —(30s)→ Half-Open</div>
+        <div class="qi">[1 Erfolg] → Closed · [1 Fehler] → Open</div>
+        <div class="qi">pro Ziel-URL · gobreaker</div></div>
+      <div class="qc"><h4>3 · HMAC-Signatur</h4>
+        <div class="mono" style="font-size:12px;color:var(--accent)">sha256(secret, "&lt;ts&gt;.&lt;body&gt;")</div>
+        <div class="qi">Header Signature / Timestamp · 5-min-Skew</div>
+        <div class="qi">Secret nur einmal sichtbar</div></div>
+      <div class="qc"><h4>4 · SSRF-Schutz</h4>
+        <div class="qi">Private / Loopback / Link-Local + 169.254.169.254 blockiert</div>
+        <div class="qi">Port-Whitelist 80/443/8080/8443</div>
+        <div class="qi">Re-Check beim Delivery gegen DNS-Rebinding</div></div>
+    </div>
+    <div class="band"><b>Plugin-Erweiterungspunkt:</b> Interface <span class="mono">Plugin{ Type() · Match() · Deliver() }</span> + Registry — heute nur <span class="mono">webhook</span>; vorgesehen: slack · teams · email · discord · transformer · inbound <span style="color:var(--dim)">(YAGNI)</span>.</div>
+  </div>
+</section>
+
+<!-- ============ 15 · BOARD REGISTRY ⭐ ============ -->
+<section class="slide" id="s15" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Entwurf · Komponente</div><h1 class="title">Board Registry &amp; Erweiterbarkeit</h1></div><div class="time">2:30</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:16px">
+    <div class="two" style="flex:1">
+      <div class="col">
+        <div class="klabel">Runtime-Registrierung · ADR 0001</div>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;flex:1">
+          <div class="badbox" style="padding:14px 16px"><b style="color:var(--bad)">vorher</b><p style="margin:6px 0 0;font-size:14px;line-height:1.4">compile-time <span class="mono">boardplugins/</span> → neuer Typ = Recompile + Redeploy</p></div>
+          <div class="mono" style="color:var(--accent);font-size:22px">→</div>
+          <div class="goodbox" style="padding:14px 16px"><b style="color:var(--good)">nachher</b><p style="margin:6px 0 0;font-size:14px;line-height:1.4">Board Registry <span class="mono">:8007</span> · <span class="mono">POST /board-types</span> zur Laufzeit</p></div>
+        </div>
+        <p class="sub"><span class="mono" style="color:var(--amber)">boardtype.*</span>-Event → Project invalidiert TTL-Cache. Registry hält default_columns (inkl. <b>status</b>), config_schema, presentation.</p>
+      </div>
+      <div class="col">
+        <div class="klabel">Präsentation &amp; Remote-Roadmap · ADR 0002</div>
+        <div class="card tk" style="flex:1">
+          <div class="mono" style="font-size:13px;color:var(--dim);line-height:1.7">presentation.view →</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+            <span class="pill"><span class="dot" style="background:var(--accent)"></span>BoardView</span>
+            <span class="pill"><span class="dot" style="background:var(--accent)"></span>CalendarView</span>
+            <span class="pill"><span class="dot" style="background:var(--accent)"></span>GanttView</span>
+          </div>
+          <p class="sub">Unbekannt → Fallback BoardView.</p>
+          <div style="border:1.5px dashed var(--amber);padding:10px 14px;margin-top:8px">
+            <b class="mono" style="color:var(--amber)">view:"remote"</b> <span style="font-size:14px">→ Micro-Frontend / Module-Federation, ohne SPA-Redeploy</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="band"><b>Der einzige Erweiterungspunkt</b> ist <span class="mono">presentation.view</span> — heute eingebaute Renderer, morgen remote, ohne Modell-Umbau. <span style="color:var(--dim)">Ehrlich: Schreib-Authz der Registry noch offen (Backlog).</span></div>
+  </div>
+</section>
+
+<!-- ============ 16 · FLOWS ============ -->
+<section class="slide" id="s16" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow">Entwurf · Zusammenspiel</div><h1 class="title">Permission- &amp; Event-Flow</h1></div><div class="time">2:00</div></div>
+  <div class="body two">
+    <div class="card tk"><h3>Synchron · Permission-Check</h3>
+      <svg viewBox="0 0 480 240" width="100%" aria-hidden="true">
+        <line x1="70" y1="30" x2="70" y2="220" class="stroke-line" stroke-width="1"/>
+        <line x1="400" y1="30" x2="400" y2="220" class="stroke-line" stroke-width="1"/>
+        <rect x="30" y="14" width="80" height="26" class="fill-bg2 stroke-acc" stroke-width="1.2"/><text x="52" y="32" class="lbl-sm">Task</text>
+        <rect x="360" y="14" width="80" height="26" class="fill-bg2 stroke-acc" stroke-width="1.2"/><text x="378" y="32" class="lbl-sm">Project</text>
+        <path d="M70 70 H400" stroke="var(--accent)" stroke-width="1.3" fill="none" marker-end="url(#ar)"/>
+        <text x="90" y="62" class="lbl-sm" fill="var(--accent)">GET /internal/…/permissions</text>
+        <rect x="360" y="90" width="80" height="34" class="fill-panel stroke-line" stroke-width="1"/><text x="372" y="111" class="lbl-sm">Redis?</text>
+        <path d="M400 150 H70" stroke="var(--ink)" stroke-width="1.3" fill="none" stroke-dasharray="5 4" marker-end="url(#ar2)"/>
+        <text x="120" y="142" class="lbl-sm">{ role, permissions }</text>
+        <text x="30" y="200" class="lbl-sm" fill="var(--dim)">Service-Token · TTL 30 s · Event-invalidiert</text>
+        <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--accent)"/></marker>
+        <marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--ink)"/></marker></defs>
+      </svg>
+      <p class="sub">Nur wenn der Nutzer die Antwort <b>sofort</b> braucht.</p>
+    </div>
+    <div class="card amber tk"><h3>Asynchron · Outbox → Event</h3>
+      <div class="flow" style="margin-top:4px">
+        <div class="step"><span class="n mono" style="color:var(--amber)">01</span> Daten + Outbox in <b>einer</b> Transaktion</div><div class="arr"></div>
+        <div class="step"><span class="n mono" style="color:var(--amber)">02</span> outbox-Worker pollt (SKIP LOCKED)</div><div class="arr"></div>
+        <div class="step"><span class="n mono" style="color:var(--amber)">03</span> Publish Envelope → teamboard.events</div><div class="arr"></div>
+        <div class="step"><span class="n mono" style="color:var(--amber)">04</span> Publisher-Confirm → published_at</div><div class="arr"></div>
+        <div class="step"><span class="n mono" style="color:var(--amber)">05</span> Consumer idempotent · processed_events</div>
+      </div>
+      <p class="sub mono" style="margin-top:10px">event_id · type · version · trace_id · actor · payload</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 · REPO ============ -->
+<section class="slide" id="s17" data-sec="2">
+  <div class="head-row"><div><div class="eyebrow">Entwurf · Artefakte</div><h1 class="title">Repository &amp; Artefakte</h1></div><div class="time">0:45</div></div>
+  <div class="body two">
+    <div class="card tk mono" style="font-size:13.5px;line-height:1.75;color:var(--dim)">
+      <div style="color:var(--accent)">teamboard/</div>
+      ├─ services/{auth,project,…,boardregistry}/<br>
+      ├─ shared/go/{authmiddleware,eventbus,<br>&nbsp;&nbsp;&nbsp;outbox,servicetoken,observability,httputil}<br>
+      ├─ docs/{ARCHITECTURE.md, decisions/ADR-000x,<br>&nbsp;&nbsp;&nbsp;services/*.md}<br>
+      ├─ frontend/ · infra/traefik/<br>
+      └─ Makefile · docker-compose*.yml
+    </div>
+    <div class="col" style="justify-content:center">
+      <div class="card tk" style="display:flex;gap:20px;align-items:center">
+        <div style="width:120px;height:120px;border:1.5px dashed var(--line);display:grid;place-items:center;
+          font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center">QR<br>Repo-Link<br>[einsetzen]</div>
+        <div><div class="mono" style="color:var(--accent);font-size:14px">fh-wedel/MSA-26-TeamBoard</div>
+          <ul class="ticks" style="margin-top:12px"><li>Service-Detaildocs · ADRs</li><li>OpenAPI / AsyncAPI</li><li>Demo-Notebooks</li></ul></div>
+      </div>
+      <p class="sub">Doku war <b>Grundlage, nicht Nachdokumentation</b> — Brücke zur KI-Reflexion.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 · STACK ============ -->
+<section class="slide" id="s18" data-sec="3">
+  <div class="head-row"><div><div class="eyebrow">Realisierung</div><h1 class="title">Software-Stack</h1></div><div class="time">1:00</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px;justify-content:center">
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:stretch">
+      <div class="prin" style="min-height:0;background:var(--panel);border-color:var(--accent)"><b>Backend</b></div>
+      <div class="card" style="display:flex;align-items:center;font-size:16px">Go 1.22 · Chi-Router · sqlc + pgx/v5 · golang-migrate</div>
+      <div class="prin" style="min-height:0;background:var(--panel);border-color:var(--accent)"><b>Daten</b></div>
+      <div class="card" style="display:flex;align-items:center;font-size:16px">PostgreSQL 16 · Redis 7 · RabbitMQ 3.12 · MinIO/S3</div>
+      <div class="prin" style="min-height:0;background:var(--panel);border-color:var(--accent)"><b>Edge</b></div>
+      <div class="card" style="display:flex;align-items:center;font-size:16px">Traefik — lokal &amp; Prod (auf der EC2-Box)</div>
+      <div class="prin" style="min-height:0;background:var(--panel);border-color:var(--accent)"><b>Frontend</b></div>
+      <div class="card" style="display:flex;align-items:center;font-size:16px">React + TypeScript · Vite</div>
+      <div class="prin" style="min-height:0;background:var(--panel);border-color:var(--accent)"><b>Ops</b></div>
+      <div class="card" style="display:flex;align-items:center;font-size:16px">Docker Compose · GitHub Actions · GHCR · AWS EC2 · OpenTelemetry / Jaeger</div>
+    </div>
+    <p class="sub">Go für schlanke, nebenläufige Services · sqlc = typsichere Queries ohne ORM-Magie · Spec-first: OpenAPI → sqlc → Handler → Tests.</p>
+  </div>
+</section>
+
+<!-- ============ 19 · VORGEHEN ============ -->
+<section class="slide" id="s19" data-sec="3">
+  <div class="head-row"><div><div class="eyebrow">Realisierung</div><h1 class="title">Vorgehen bei der Programmerstellung</h1></div><div class="time">1:30</div></div>
+  <div class="body two">
+    <div class="col" style="justify-content:center">
+      <svg viewBox="0 0 400 340" width="100%" aria-hidden="true">
+        <circle cx="200" cy="170" r="120" class="stroke-line" stroke-width="1" stroke-dasharray="3 6"/>
+        <g class="fill-panel stroke-acc" stroke-width="1.4">
+          <rect x="140" y="20" width="120" height="44"/><rect x="300" y="148" width="90" height="44"/>
+          <rect x="140" y="276" width="120" height="44"/><rect x="10" y="148" width="110" height="44"/>
+        </g>
+        <g class="lbl" font-size="12.5"><text x="168" y="47">Planen</text><text x="312" y="175">Doku-</text>
+          <text x="152" y="303">Impl. + Review</text><text x="22" y="168">Doku</text><text x="22" y="182">synchron.</text></g>
+        <text x="316" y="190" class="lbl-sm">mentieren</text>
+        <g stroke="var(--accent)" stroke-width="1.3" fill="none" marker-end="url(#c1)">
+          <path d="M260 42 Q345 60 345 148"/><path d="M345 192 Q320 276 260 292"/>
+          <path d="M140 292 Q60 276 65 192"/><path d="M65 148 Q60 60 140 50"/></g>
+        <circle cx="200" cy="170" r="52" fill="color-mix(in srgb,var(--accent) 10%,var(--bg2))" stroke="var(--accent)" stroke-width="1.2"/>
+        <text x="172" y="166" class="lbl-sm" fill="var(--accent)">Source of</text><text x="180" y="182" class="lbl-sm" fill="var(--accent)">Truth</text>
+        <defs><marker id="c1" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--accent)"/></marker></defs>
+      </svg>
+    </div>
+    <div class="col" style="justify-content:center">
+      <div class="klabel">Doku-first</div>
+      <ul class="ticks">
+        <li><b>Source of Truth:</b> ARCHITECTURE.md + Service-Docs</li>
+        <li><b>Spec-first:</b> OpenAPI → sqlc → Handler → Tests</li>
+        <li>Jedes Feature erst planen, dann bauen</li>
+        <li>Tests Pflicht: Domain-Unit + Repository-Integration (Testcontainers)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 20 · AGENTIC HERANGEHEN ⭐ ============ -->
+<section class="slide" id="s20" data-sec="3">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Realisierung · KI</div><h1 class="title">Agentic Engineering — Herangehensweise</h1></div><div class="time">2:00</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:20px;justify-content:center">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px">
+      <div class="card tk"><span class="mono" style="color:var(--accent);font-size:12px">PHASE 01</span>
+        <h3 style="font-family:var(--sans);text-transform:none;color:var(--ink);font-size:17px;margin:8px 0 8px">Gemeinsame Planung</h3>
+        <p class="sub">Team + Opus 4.7 zusammen — Komponenten-Zuschnitt schon im Dialog mit dem Modell.</p></div>
+      <div class="card tk"><span class="mono" style="color:var(--accent);font-size:12px">PHASE 02</span>
+        <h3 style="font-family:var(--sans);text-transform:none;color:var(--ink);font-size:17px;margin:8px 0 8px">Architektur vor Code</h3>
+        <p class="sub">Dokument-Stapel (alle Services · Code-Style · Doc-Style · Testing) bevor Code entsteht.</p></div>
+      <div class="card tk"><span class="mono" style="color:var(--accent);font-size:12px">PHASE 03</span>
+        <h3 style="font-family:var(--sans);text-transform:none;color:var(--ink);font-size:17px;margin:8px 0 8px">Feature-Loop</h3>
+        <p class="sub">Wiederholtes <span class="mono">plan → build → doc</span>.</p></div>
+    </div>
+    <div class="band" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg2));text-align:center;font-size:18px">
+      „Doku als <b style="color:var(--accent)">Vertrag für den Agent</b> — nicht Nachdokumentation.“</div>
+  </div>
+</section>
+
+<!-- ============ 21 · AGENTIC REFLEXION ⭐ ============ -->
+<section class="slide" id="s21" data-sec="3">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Realisierung · KI</div><h1 class="title">Agentic Engineering — Reflexion</h1></div><div class="time">2:30</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px">
+    <div class="split2" style="flex:1">
+      <div class="goodbox"><h3>✓ Lief gut</h3>
+        <ul class="ticks"><li>Ausführliche Vorab-Doku → direkt gut strukturiertes, funktional relativ vollständiges Grundgerüst</li>
+          <li>Struktur erlaubte schnelles Anfügen neuer Features</li>
+          <li>Bei regelmäßigem Doku-Update wenige Blind Spots</li></ul></div>
+      <div class="badbox"><h3>⚠ Lief nicht so gut</h3>
+        <ul class="ticks"><li>Nach ersten Änderungen viele Blind Spots — Doku oft nicht automatisch mitgezogen</li>
+          <li>Anfangs nur „Quick Solutions“, teils unvermerkt</li>
+          <li>Bei größeren Umstellungen (v. a. Frontend) kommentarlos entfernte Funktionalität</li></ul></div>
+    </div>
+    <div class="band"><b>Fallstudie Auth:</b> zu Beginn nur Pseudo-Validierung der Tokens — später aufwendig auf echtes RS256/JWKS nachgezogen. <span style="color:var(--dim)">Learning: enge Reviews + Doku-Sync als Disziplin, nicht als Automatismus.</span></div>
+  </div>
+</section>
+
+<!-- ============ 22 · HERAUSFORDERUNGEN ============ -->
+<section class="slide" id="s22" data-sec="3">
+  <div class="head-row"><div><div class="eyebrow">Realisierung</div><h1 class="title">Herausforderungen (jenseits KI)</h1></div><div class="time">1:00</div></div>
+  <div class="body quad">
+    <div class="qc"><h4>Koordination im Monorepo</h4><div class="qi">Mehrere Leute, ein Repo — Event-Schema als geteilter Vertrag</div></div>
+    <div class="qc"><h4>Verteiltes Debugging</h4><div class="qi">Fehler über Service-Grenzen — Trace-ID durch Gateway → Services → RabbitMQ-Header</div></div>
+    <div class="qc"><h4>Scope / Zeit</h4><div class="qi">MVP vs. Nice-to-have — härtester Teil; Backlog dokumentiert Ausgelassenes</div></div>
+    <div class="qc"><h4>Konsistenz</h4><div class="qi">Eventual Consistency mental modellieren</div></div>
+  </div>
+</section>
+
+<!-- ============ 23 · DEPLOYMENT ============ -->
+<section class="slide" id="s23" data-sec="4">
+  <div class="head-row"><div><div class="eyebrow">Deployment</div><h1 class="title">Deployment — ein Kommando</h1></div><div class="time">1:00</div></div>
+  <div class="body" style="display:grid;grid-template-columns:1fr 1.15fr;gap:24px">
+    <div class="col">
+      <div class="term">
+        <div class="c"># Repo auschecken &amp; hochfahren</div>
+        <div><span class="g">$</span> git clone …/MSA-26-TeamBoard</div>
+        <div style="font-size:17px"><span class="g">$</span> make up</div>
+        <div style="margin-top:12px" class="c">$ make seed · make logs · make down</div>
+      </div>
+      <p class="sub">Anforderung „ein Kommando“ erfüllt: <b>make up</b> bringt alles hoch.</p>
+    </div>
+    <div class="col">
+      <div class="card tk"><h3>Lokal — Docker-Compose-Box</h3>
+        <p style="margin:0;font-size:14.5px;line-height:1.45">7 Services + Frontend + Traefik + Postgres/Redis/RabbitMQ/MinIO/Jaeger · Hot-Reload via <span class="mono">air</span></p></div>
+      <div class="card amber tk"><h3>AWS — GitHub Actions → GHCR → EC2</h3>
+        <p style="margin:0;font-size:14.5px;line-height:1.45">Build-Matrix ×8 (SHA+latest) → SSH-Deploy → <span class="mono">deploy.sh</span> (flock · .env-Secrets · git reset --hard · compose pull &amp; up -d)</p></div>
+      <p class="sub">Postgres/Redis/RabbitMQ/MinIO als Container, <b>nicht managed</b> — Auslagern in RDS/ElastiCache/ECS ist niedrig priorisierte Folgearbeit, kein Blocker.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 24 · DEMO ⭐ ============ -->
+<section class="slide" id="s24" data-sec="4">
+  <div class="head-row"><div><div class="eyebrow"><span class="star">★</span> Deployment</div><h1 class="title">Laufendes System — Live-Demo</h1></div><div class="time">3:00</div></div>
+  <div class="body">
+    <div class="demo-frame tk">
+      <div class="play">▶ LIVE-DEMO</div>
+      <ul class="ticks" style="text-align:left">
+        <li>User-Story 02 live nachspielen: Task „In Arbeit“ → „Erledigt“</li>
+        <li>Zweites Browserfenster für den Realtime-Push (WebSocket)</li>
+        <li>Wenn Zeit: Runtime-Registrierung eines Board-Typs · <span class="mono">make demo-board-types</span></li>
+        <li>Screenshots als Fallback bereithalten</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 25 · FUNKTIONSUMFANG ============ -->
+<section class="slide" id="s25" data-sec="4">
+  <div class="head-row"><div><div class="eyebrow">Evaluation</div><h1 class="title">Realisierter Funktionsumfang</h1></div><div class="time">1:00</div></div>
+  <div class="body two">
+    <div class="col"><div class="klabel" style="color:var(--good)">Umgesetzt</div>
+      <div class="checks">
+        <div class="c y">Alle 7 Services + Gateway</div>
+        <div class="c y">Zero-Trust-Auth (RS256/JWKS, Service-Token)</div>
+        <div class="c y">Kanban-Boards: Tasks / Kommentare / Anhänge</div>
+        <div class="c y">Dokument-Versionierung · Realtime-Notifications</div>
+        <div class="c y">Webhooks: Retry / Circuit-Breaker / HMAC / SSRF</div>
+        <div class="c y">Runtime-Board-Typen + Presentation-Spec</div>
+        <div class="c y">Ein-Kommando-Deployment + CI/CD</div>
+      </div></div>
+    <div class="col"><div class="klabel">Bewusst offen · Backlog</div>
+      <div class="checks">
+        <div class="c n">Schreib-Authz der Registry (Admin-Rolle)</div>
+        <div class="c n">view:"remote" Micro-Frontends</div>
+        <div class="c n">Per-Board-View-Switch</div>
+        <div class="c n">Inbound-Webhooks + weitere Plugin-Typen</div>
+        <div class="c n">Edge-Observability am Gateway</div>
+        <div class="c n">Managed-AWS-Split (RDS/ElastiCache/ECS)</div>
+      </div>
+      <p class="sub" style="margin-top:14px">„Offen“ heißt <b>bewusst priorisiert</b>, nicht vergessen — die Struktur trägt diese Erweiterungen bereits.</p></div>
+  </div>
+</section>
+
+<!-- ============ 26 · FAZIT ============ -->
+<section class="slide" id="s26" data-sec="5">
+  <div class="head-row"><div><div class="eyebrow">Abschluss</div><h1 class="title">Fazit &amp; Ausblick</h1></div><div class="time">1:30</div></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:18px">
+    <div class="split2" style="flex:1">
+      <div class="goodbox"><h3>Erreicht</h3>
+        <ul class="ticks"><li>Tragfähige Microservice-Architektur entlang Bounded Contexts</li>
+          <li>Erweiterbarkeit als First-Class-Konzept (Board Registry, Plugin-Backbone)</li>
+          <li>Doku-getriebenes agentisches Vorgehen</li></ul></div>
+      <div class="card tk"><h3>Nächste Schritte</h3>
+        <ul class="ticks"><li>Remote-Board-Views (<span class="mono">view:"remote"</span>)</li>
+          <li>Rollen-Authz-Härtung · Managed-Services / ECS</li>
+          <li>Inbound-Integrationen · Edge-Observability</li></ul></div>
+    </div>
+    <div class="band" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--bg2));text-align:center;font-size:19px">
+      „Doku-getriebenes <b style="color:var(--accent)">Agentic Engineering</b> skaliert — aber nur mit menschlicher Kontrolle.“</div>
+  </div>
+</section>
+
+<!-- ============ 27 · QUELLEN ============ -->
+<section class="slide" id="s27" data-sec="5">
+  <div class="head-row"><div><div class="eyebrow">Abschluss</div><h1 class="title">Quellenverzeichnis</h1></div><div class="time">0:15</div></div>
+  <div class="body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px">
+    <div class="card tk"><h3>Standards / Tools</h3>
+      <p class="sub" style="line-height:1.9">JSON · OpenAPI / Swagger · AsyncAPI · RabbitMQ · Traefik · sqlc · Google Go Style Guide · RFC 7807</p></div>
+    <div class="card tk"><h3>Projekt-intern</h3>
+      <p class="sub" style="line-height:1.9">ARCHITECTURE.md · ADR 0001 / 0002 · Service-Detaildocs · GitHub-Repo</p></div>
+    <div class="card amber tk"><h3>KI</h3>
+      <p class="sub" style="line-height:1.9">Eingesetztes Modell: <b style="color:var(--amber)">Opus 4.7</b> + Werkzeugkontext (Claude Code) — durchgängig von Entwurf bis Doku.</p></div>
+  </div>
+</section>
+
+<!-- chrome -->
+<div class="chrome">
+  <div class="rail" id="rail"></div>
+  <div class="foot">
+    <span class="sec" id="secname"></span>
+    <span class="nav">
+      <button id="prev" aria-label="Zurück">◄</button>
+      <span class="count"><b id="cur">01</b> / 27</span>
+      <button id="next" aria-label="Weiter">►</button>
+    </span>
+  </div>
+</div>
+
+</div><!-- /stage -->
+</div><!-- /wrap -->
+
+<div id="hint"><b>← →</b> blättern · <b>F</b> Vollbild · <b>N</b> Notizen</div>
+<div id="notes"><div class="nh">Sprechernotiz</div><div class="nt" id="ntext"></div></div>
+
+<script>
+(function(){
+  var stage=document.getElementById('stage');
+  var slides=Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var N=slides.length, i=0;
+  var secNames=['Kontext & Team','Anforderungen','Architektur & Komponenten','Realisierung & KI','Deployment & Demo','Fazit'];
+  var secRanges=[[0,3],[4,6],[7,16],[17,21],[22,24],[25,26]]; // 0-based inclusive
+  var notes=[
+    "Begrüßung, Projekt in einem Satz, Team vorstellen, Ablauf ankündigen (Vortrag + Live-Demo am Ende).",
+    "30-Sekunden-Durchlauf; die zwei Schwerpunkte ankündigen: KI-Reflexion und Erweiterbarkeits-Architektur.",
+    "Vorbild Trello/Notion/Jira-Light, aber Fokus = skalierbare, komponentenbasierte Architektur, nicht Feature-Fülle. Leitfragen: Echtzeit-Events, unabhängig skalieren, Datenkonsistenz. MVP als roter Faden.",
+    "Schnitt entlang der Bounded Contexts; Querschnitt gemeinsam. KI deklariert eingesetzt (Prof. verlangt Reflexion). PLATZHALTER: echte Namen eintragen.",
+    "Was wir bewusst hineingelesen haben: Schwerpunkt Architektur, nicht UI-Umfang. Bewusste Scope-Grenzen. „Denkbare Funktionen“ = Auswahl, kein Pflichtkatalog.",
+    "NFRs sind der eigentliche Kern (Architektur-Modul). Kurz je NFR zeigen, wie sie im Entwurf verankert ist — Bogen zu Kap. Entwurf.",
+    "Stories zeigen Cross-Service-Zusammenspiel (Story 2 = Task→Project-Permission→Event→Notification). Genau diese Story in der Demo wiederverwenden.",
+    "Big Picture, nicht jede Linie. Fünf Kernentscheidungen: Microservices/Bounded Contexts, DB-per-Service, Event-Backbone, Gateway als Single Entry, Stateless als Default (nur Notification stateful). JWT-Prüfung bewusst NICHT am Gateway → nächste Folie.",
+    "Die „Diskussion der gewählten Architektur“. An zwei Prinzipien Trade-offs zeigen: Zero-Trust und Async-First. Abweichungen nur per ADR — Brücke zu ADR 0001/0002.",
+    "Bewusst kompakt — die geradlinigen Services. Ein Detail je Service: Auth = Vertrauensanker (JWKS), Task = Status-Semantik, Document = Storage läuft an den Services vorbei.",
+    "Architektonisch wichtigster Domänen-Service: einzige autoritative Quelle für Berechtigungen. Synchron nur wenn nötig. Redis-Cache 30s, Event-Invalidierung statt Polling. Owner der Board-Instanzen (Typen ≠ Instanzen).",
+    "Einzige bewusst zustandsbehaftete Komponente. Kernproblem: Event trifft Instanz A, User hängt an Instanz B → Redis-Backplane. Vor Push gegen Project-Permissions gefiltert. Persistente Notifs zusätzlich in DB.",
+    "Zweck: Domain-Events → externe HTTP-Calls. Abgrenzung: Output-Adapter, nicht Board-Typen. DB-Queue statt Job-Broker: eine Persistenz, Multi-Worker-safe via SKIP LOCKED. Volles Envelope → Retry autonom.",
+    "Hier die Engineering-Tiefe. SSRF ist der kritische Punkt: Validierung beim Anlegen reicht nicht, Custom-Dialer prüft die aufgelöste IP erneut beim Call. Erweiterbarkeit vorgesehen, im MVP nicht gebaut (YAGNI).",
+    "Das architektonische Alleinstellungsmerkmal und Antwort auf die geforderte Plugin-Architektur. presentation.view = einziger Erweiterungspunkt: heute eingebaute Renderer, morgen remote, ohne Modell-Umbau. Spalte→Status jetzt explizit statt DeriveStatus. Ehrlich: Schreib-Authz noch offen.",
+    "Zwei Kommunikationsmuster gegenübergestellt: synchron nur wenn der Nutzer sofort Antwort braucht, sonst Event. Outbox garantiert kein Event-Verlust (Confirm vor Commit). Idempotenz, weil Events mehrfach ankommen dürfen.",
+    "Monorepo-Begründung: atomare Cross-Service-Änderungen, geteilter Code, ein git clone/make up. Doku war Grundlage, nicht Nachdokumentation → Brücke zur KI-Reflexion. PLATZHALTER: echten Repo-Link/QR einsetzen.",
+    "Nicht vorlesen — zwei Begründungen: Go für schlanke nebenläufige Services; sqlc = typsichere Queries ohne ORM. Query-Layer generiert, Handler handgeschrieben gegen OpenAPI-Stubs. Ein shared/go gegen Duplikation.",
+    "Kernprinzip Doku-first: vor dem ersten Code standen Architektur, alle Specs, Code-/Doc-Style, Test-Strategie. Jedes Feature erst planen, dann bauen. Tests Pflicht. Voraussetzung für die nächste Folie.",
+    "Bewusste Entscheidung: LLM schon in der Planungsphase, nicht erst beim Coden. Umfangreiche Vorab-Doku als verbindlicher Kontext. Der Prozess selbst wurde im Verlauf geschärft.",
+    "Ehrliche Bilanz (verlangt die Aufgabe). Kausalität: guter Start wegen Doku, spätere Reibung wegen nicht-nachgezogener Doku. Auth-Beispiel als Beleg (Bogen zu Folie 10). Konsequenz: Reviews verschärft, Doku-Update fester Schritt.",
+    "Projektmanagement-Sicht. Ein Beispiel je Karte (Trace-ID durch Gateway→Services→RabbitMQ machte verteiltes Debugging handhabbar). Ehrlich: Priorisierung war der härteste Teil.",
+    "Anforderung „ein Kommando“ erfüllt: make up. Lokal HTTP, TLS erst in AWS. Ehrlich einordnen: einzelne EC2-Box, Compose-Stack — bewusst simpel; Managed-Split ist niedrig priorisierte Folgearbeit.",
+    "User-Story von Folie 7 live nachspielen. Zweites Browserfenster für den Realtime-Push. Wenn Zeit: Runtime-Registrierung eines Board-Typs via make demo-board-types. Screenshots nur, falls die Demo klemmt.",
+    "Klare, ehrliche Grenze MVP vs. Backlog (aus TODO.md). Betonen: „offen“ heißt bewusst priorisiert, nicht vergessen — Struktur trägt diese Erweiterungen bereits.",
+    "Zusammenfassende Bewertung: Architektur-Ziele des Moduls erreicht (Skalierung, Event-Verteilung, Konsistenz). Wichtigstes Learning wiederholen. Was wir nächstes Mal anders machen: Doku-Sync erzwingen, kleinere Agent-Schritte reviewen.",
+    "Kurz stehen lassen. Explizit die KI-Werkzeuge nennen (Prof. verlangt: welche Werkzeuge, wie eingesetzt)."
+  ];
+
+  // build rail
+  var rail=document.getElementById('rail');
+  for(var s=0;s<6;s++){var d=document.createElement('div');d.className='seg';rail.appendChild(d);}
+  var segs=rail.children;
+  // build agenda grid on slide 2
+  var ag=document.getElementById('agenda-grid');
+  if(ag){for(var a=0;a<6;a++){var c=document.createElement('div');c.className='prin';c.style.minHeight='150px';
+    c.innerHTML='<div class="pd" style="color:var(--accent)">0'+(a+1)+'</div><div class="pn">'+secNames[a]+'</div>';ag.appendChild(c);}}
+
+  function secOf(idx){for(var s=0;s<secRanges.length;s++){if(idx>=secRanges[s][0]&&idx<=secRanges[s][1])return s;}return 0;}
+  function pad(n){return (n<10?'0':'')+n;}
+
+  function show(n){
+    i=Math.max(0,Math.min(N-1,n));
+    slides.forEach(function(sl,k){sl.classList.toggle('active',k===i);});
+    var sec=secOf(i);
+    for(var s=0;s<6;s++){segs[s].className='seg'+(s<sec?' done':s===sec?' on':'');}
+    document.getElementById('cur').textContent=pad(i+1);
+    document.getElementById('secname').textContent=(i+1===1?'':(pad(sec+1)+' · '))+secNames[sec];
+    document.getElementById('ntext').textContent=notes[i]||'';
+  }
+  function fit(){var s=Math.min(window.innerWidth/1280,window.innerHeight/720);
+    stage.style.transform='scale('+s+')';}
+
+  window.addEventListener('resize',fit);
+  document.getElementById('next').addEventListener('click',function(){show(i+1);});
+  document.getElementById('prev').addEventListener('click',function(){show(i-1);});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){show(i+1);e.preventDefault();}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){show(i-1);e.preventDefault();}
+    else if(e.key==='Home'){show(0);}else if(e.key==='End'){show(N-1);}
+    else if(e.key==='f'||e.key==='F'){if(!document.fullscreenElement){(document.documentElement.requestFullscreen||function(){})();}else{document.exitFullscreen();}}
+    else if(e.key==='n'||e.key==='N'){document.body.classList.toggle('notes');}
+  });
+  fit();show(0);
+  setTimeout(function(){var h=document.getElementById('hint');if(h)h.style.transition='opacity 1s';},4000);
+})();
+</script>

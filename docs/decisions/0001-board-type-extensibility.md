@@ -8,7 +8,7 @@
 
 Neue Boardtypen sollen ergänzbar sein, **ohne** Änderungen an Task-, Document- oder anderen Services. In der ursprünglichen Umsetzung waren Boardtypen jedoch
 nur **compile-time** ergänzbar: je Typ ein Go-Package unter
-`services/project/internal/boardplugins/` mit `init()`→`Register()`, aktiviert via Blank-Imports in
+`services/domain/project/internal/boardplugins/` mit `init()`→`Register()`, aktiviert via Blank-Imports in
 `main.go`. Externe Entwickler konnten somit keine Boardtypen hinzufügen, ohne den Project-Service neu
 zu bauen und zu deployen.
 

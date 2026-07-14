@@ -83,9 +83,9 @@ import "github.com/teamboard/shared/go/authmiddleware"
 `shared/go` ist Teil des Monorepos und wird via Replace-Directive eingebunden:
 
 ```go
-// services/task/go.mod
+// services/domain/task/go.mod
 require github.com/teamboard/shared/go v0.0.0
-replace github.com/teamboard/shared/go => ../../shared/go
+replace github.com/teamboard/shared/go => ../../../shared/go
 ```
 
 Vorteil: atomare Updates, keine Versions-Hölle. Nachteil: bei externer Wiederverwendung müsste man tags/releases einführen — im MVP nicht nötig.
@@ -1080,7 +1080,7 @@ Cross-cutting code shared between TeamBoard services.
 In a service's `go.mod`:
 ```
 require github.com/teamboard/shared/go v0.0.0
-replace github.com/teamboard/shared/go => ../../shared/go
+replace github.com/teamboard/shared/go => ../../../shared/go
 ```
 
 See individual package docs (`go doc`) for details.

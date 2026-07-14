@@ -1481,7 +1481,7 @@ type Config struct {
 ## 15. Verzeichnisstruktur
 
 ```
-services/plugin/
+services/domain/plugin/
 ├── cmd/server/main.go
 ├── internal/
 │   ├── api/

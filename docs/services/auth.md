@@ -246,7 +246,7 @@ CREATE INDEX idx_outbox_unpublished
 ### 3.3 Migration-Dateien
 
 ```
-services/auth/migrations/
+services/domain/auth/migrations/
 ├── 0001_init.up.sql      # Extensions + Tabellen oben
 ├── 0001_init.down.sql
 ├── 0002_seed_signing_key.up.sql   # Initialer Schlüssel
@@ -1080,7 +1080,7 @@ type Config struct {
 ## 13. Verzeichnisstruktur
 
 ```
-services/auth/
+services/domain/auth/
 ├── cmd/
 │   └── server/
 │       └── main.go                      # Wiring + HTTP-Server
@@ -1482,8 +1482,9 @@ docker-build:
 ### 17.1 Zweck
 
 Langlebige, vom User selbst verwaltete Credentials für externe Clients, die sich nicht über den
-normalen Login-Flow anmelden können — z. B. den TeamBoard-MCP-Server (`mcp-server/`) für Claude
-Desktop. Erstellung/Verwaltung im Frontend unter **Settings**.
+normalen Login-Flow anmelden können — z. B. den TeamBoard-[MCP-Server](mcp-server.md) für Claude
+Desktop/Code. Erstellung/Verwaltung im Frontend unter **Settings**. Wie ein MCP-Client das Token
+konkret nutzt, beschreibt [`docs/services/mcp-server.md`](mcp-server.md).
 
 ### 17.2 Format und Speicherung
 

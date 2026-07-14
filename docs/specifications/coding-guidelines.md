@@ -244,7 +244,7 @@ import (
     "github.com/jackc/pgx/v5"
 
     // 3. Interne Pakete (eigenes Modul oder shared/)
-    "github.com/teamboard/services/task/internal/domain"
+    "github.com/teamboard/services/domain/task/internal/domain"
     "github.com/teamboard/shared/go/observability"
 )
 ```

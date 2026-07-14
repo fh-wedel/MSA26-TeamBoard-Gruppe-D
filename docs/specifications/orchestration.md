@@ -111,12 +111,12 @@ Vollständige Liste aller Container im Compose-Stack:
 
 | Container | Build-Context | Internal Port |
 |-----------|---------------|---------------|
-| `auth` | `./services/auth` | 8001 |
-| `project` | `./services/project` | 8002 |
-| `task` | `./services/task` | 8003 |
-| `document` | `./services/document` | 8004 |
-| `notification` | `./services/notification` | 8005 |
-| `plugin` | `./services/plugin` | 8006 |
+| `auth` | `./services/domain/auth` | 8001 |
+| `project` | `./services/domain/project` | 8002 |
+| `task` | `./services/domain/task` | 8003 |
+| `document` | `./services/domain/document` | 8004 |
+| `notification` | `./services/domain/notification` | 8005 |
+| `plugin` | `./services/domain/plugin` | 8006 |
 | `frontend` | `./frontend` | 3000 |
 
 ### Initialisierungs-Container (Run-once-and-exit)
@@ -281,7 +281,7 @@ services:
   
   auth:
     build:
-      context: ./services/auth
+      context: ./services/domain/auth
       dockerfile: Dockerfile
     environment:
       SERVICE_NAME: auth-service
@@ -330,7 +330,7 @@ services:
 
   project:
     build:
-      context: ./services/project
+      context: ./services/domain/project
       dockerfile: Dockerfile
     environment:
       SERVICE_NAME: project-service
@@ -374,7 +374,7 @@ services:
 
   task:
     build:
-      context: ./services/task
+      context: ./services/domain/task
       dockerfile: Dockerfile
     environment:
       SERVICE_NAME: task-service
@@ -417,7 +417,7 @@ services:
 
   document:
     build:
-      context: ./services/document
+      context: ./services/domain/document
       dockerfile: Dockerfile
     environment:
       SERVICE_NAME: document-service
@@ -477,7 +477,7 @@ services:
 
   notification:
     build:
-      context: ./services/notification
+      context: ./services/domain/notification
       dockerfile: Dockerfile
     environment:
       SERVICE_NAME: notification-service
@@ -532,7 +532,7 @@ services:
 
   plugin:
     build:
-      context: ./services/plugin
+      context: ./services/domain/plugin
       dockerfile: Dockerfile
     environment:
       SERVICE_NAME: plugin-service
@@ -611,7 +611,7 @@ services:
     build:
       target: dev   # Multi-stage Dockerfile mit dev-Stage
     volumes:
-      - ./services/auth:/app
+      - ./services/domain/auth:/app
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
@@ -619,7 +619,7 @@ services:
     build:
       target: dev
     volumes:
-      - ./services/project:/app
+      - ./services/domain/project:/app
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
@@ -627,7 +627,7 @@ services:
     build:
       target: dev
     volumes:
-      - ./services/task:/app
+      - ./services/domain/task:/app
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
@@ -635,7 +635,7 @@ services:
     build:
       target: dev
     volumes:
-      - ./services/document:/app
+      - ./services/domain/document:/app
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
@@ -643,7 +643,7 @@ services:
     build:
       target: dev
     volumes:
-      - ./services/notification:/app
+      - ./services/domain/notification:/app
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
@@ -651,7 +651,7 @@ services:
     build:
       target: dev
     volumes:
-      - ./services/plugin:/app
+      - ./services/domain/plugin:/app
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
 
@@ -665,7 +665,7 @@ volumes:
   go-mod-cache:
 ```
 
-**Multi-stage Dockerfile** (Beispiel `services/auth/Dockerfile`):
+**Multi-stage Dockerfile** (Beispiel `services/domain/auth/Dockerfile`):
 
 ```dockerfile
 # ---- Stage 1: Build ----

@@ -3,13 +3,16 @@
 ```mermaid
 graph TB
     Browser(["🌐 Browser · React SPA"])
+    MCPClient(["🤖 Claude Desktop / Code · MCP client"])
 
-    subgraph GW["Traefik Gateway · :80"]
+    subgraph GW["Traefik Gateway · :80 / :443 (self-signed)"]
         T["Rate Limiting · CORS · Security Headers · Routing"]
     end
 
+    MCP["**MCP Server** · behind Traefik at /mcp\nMCP ↔ REST adapter\nno DB · no events · forwards PAT"]
+
     subgraph SVC["Microservices"]
-        Auth["**Auth** :8001\nJWT · JWKS · Users"]
+        Auth["**Auth** :8001\nJWT · JWKS · Users\nPAT issue + introspect"]
         Project["**Project** :8002\nBoards · Members\n★ Authoritative Permissions"]
         Task["**Task** :8003\nTasks · Comments\nStatus Transitions"]
         Document["**Document** :8004\nMetadata · Versions\nPre-signed URLs"]
@@ -25,12 +28,16 @@ graph TB
         S3[("MinIO / S3\nDocument Storage")]
     end
 
-    Browser -- "HTTPS" --> GW
-    Browser <-- "WebSocket" --> Notification
+    Browser <-- "HTTPS · WebSocket (/ws, pass-through)" --> GW
+    GW <-- "/ws" --> Notification
+    MCPClient -- "HTTPS /mcp · Bearer PAT" --> GW
+    GW -- "/mcp (stripprefix)" --> MCP
+    MCP -- "REST /api/v1 · forwards PAT" --> GW
     GW -- "routes (JWT validated per-service)" --> Auth & Project & Task & Document & Notification & Plugin & BoardRegistry
 
     Task & Document & Notification & Plugin -- "GET /internal/permissions (service token)" --> Project
     Project -- "GET /internal/board-types (cached)" --> BoardRegistry
+    Project & Task & BoardRegistry -. "introspect PAT (tbpat_) · cached 30s" .-> Auth
 
     Auth & Project & Task & Document & Notification & Plugin & BoardRegistry -- "SQL + Outbox" --> PG
 
@@ -40,3 +47,5 @@ graph TB
     Notification & Project -- "cache TTL 30s / backplane" --> Redis
     Document -- "upload / download" --> S3
 ```
+
+

@@ -2,10 +2,10 @@ services:
   auth:
     build:
       context: .
-      dockerfile: services/auth/Dockerfile
+      dockerfile: services/domain/auth/Dockerfile
       target: dev
     volumes:
-      - ./services/auth:/workspace/services/auth
+      - ./services/domain/auth:/workspace/services/domain/auth
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
@@ -13,10 +13,10 @@ services:
   project:
     build:
       context: .
-      dockerfile: services/project/Dockerfile
+      dockerfile: services/domain/project/Dockerfile
       target: dev
     volumes:
-      - ./services/project:/workspace/services/project
+      - ./services/domain/project:/workspace/services/domain/project
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
@@ -24,10 +24,10 @@ services:
   task:
     build:
       context: .
-      dockerfile: services/task/Dockerfile
+      dockerfile: services/domain/task/Dockerfile
       target: dev
     volumes:
-      - ./services/task:/workspace/services/task
+      - ./services/domain/task:/workspace/services/domain/task
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
@@ -35,10 +35,10 @@ services:
   document:
     build:
       context: .
-      dockerfile: services/document/Dockerfile
+      dockerfile: services/domain/document/Dockerfile
       target: dev
     volumes:
-      - ./services/document:/workspace/services/document
+      - ./services/domain/document:/workspace/services/domain/document
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
@@ -46,10 +46,10 @@ services:
   notification:
     build:
       context: .
-      dockerfile: services/notification/Dockerfile
+      dockerfile: services/domain/notification/Dockerfile
       target: dev
     volumes:
-      - ./services/notification:/workspace/services/notification
+      - ./services/domain/notification:/workspace/services/domain/notification
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
@@ -57,10 +57,10 @@ services:
   plugin:
     build:
       context: .
-      dockerfile: services/plugin/Dockerfile
+      dockerfile: services/domain/plugin/Dockerfile
       target: dev
     volumes:
-      - ./services/plugin:/workspace/services/plugin
+      - ./services/domain/plugin:/workspace/services/domain/plugin
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml
@@ -68,10 +68,10 @@ services:
   boardregistry:
     build:
       context: .
-      dockerfile: services/boardregistry/Dockerfile
+      dockerfile: services/domain/boardregistry/Dockerfile
       target: dev
     volumes:
-      - ./services/boardregistry:/workspace/services/boardregistry
+      - ./services/domain/boardregistry:/workspace/services/domain/boardregistry
       - ./shared/go:/workspace/shared/go
       - go-mod-cache:/go/pkg/mod
     command: air -c .air.toml

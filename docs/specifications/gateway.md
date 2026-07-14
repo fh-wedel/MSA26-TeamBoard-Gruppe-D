@@ -83,6 +83,13 @@ Entscheidung: Traefik — lokal **und** in Produktion (Service-Discovery via Doc
 | `/api/v1/board-types/*` | boardregistry | `/board-types`, `/board-types/{type}` (Katalog + Registrierung) |
 | `/api/v1/notifications/*` | notification | `/notifications`, `/notifications/{id}/read` |
 | `/ws` | notification | WebSocket-Upgrade |
+| `/mcp` | mcp-server | MCP-Streamable-HTTP für Claude Desktop/Code (`stripprefix`, siehe unten) |
+
+Die `/mcp`-Route trägt keine `/api/v1`-Konvention: Sie zielt auf den [MCP-Server](../services/mcp-server.md)
+(kein Domain-Service), der intern auf `:8080` lauscht. Das Präfix `/mcp` wird per
+`stripprefix`-Middleware entfernt, bevor der Request den Server erreicht. Der MCP-Server ruft
+anschließend selbst wieder über das Gateway (`http://traefik`) die `/api/v1/...`-Routen auf, damit
+CORS/Rate-Limit/Routing identisch greifen.
 
 ### 2.2 Pfad-Disambiguation
 
@@ -288,9 +295,14 @@ für **alle** gerouteten Services. Die Service-Labels in §3.2 enthalten daher n
 
 ## 4. TLS und Zertifikate
 
-### 4.1 Lokal: HTTP only
+### 4.1 Lokal: HTTP + self-signed HTTPS
 
-Traefik läuft auf Port 80. WSS und HTTPS sind in lokaler Entwicklung nicht nötig.
+Traefik läuft auf Port 80 (Haupt-Entrypoint) **und** 443. Der `websecure`-Entrypoint terminiert TLS
+mit Traefiks eingebautem **self-signed**-Zertifikat (kein `certResolver` konfiguriert) und wendet
+dieselben Edge-Middlewares an wie `web` (Security-Header, CORS, Rate-Limit). Für die App selbst ist
+HTTPS lokal nicht nötig; aktiviert wurde 443 für die **[`/mcp`-Route](#21-pfad-zu-service-mapping)**,
+weil der HTTP-Transport von Claude Code eine `https://`-URL verlangt. Clients müssen das
+self-signed-Zertifikat akzeptieren (Details: [`services/other/mcp-server/README.md`](../../services/other/mcp-server/README.md)).
 
 ### 4.2 Produktion: TLS via Let's Encrypt (sslip.io)
 

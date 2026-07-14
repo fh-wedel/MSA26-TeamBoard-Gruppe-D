@@ -3,7 +3,7 @@
 > **Service:** `boardregistry`
 > **Port:** 8007
 > **Datenbank:** `boardregistry_db` (PostgreSQL)
-> **Modulpfad:** `github.com/teamboard/services/boardregistry`
+> **Modulpfad:** `github.com/teamboard/services/domain/boardregistry`
 
 ---
 

@@ -51,34 +51,35 @@ Komponentenbasiertes Microservice-System mit folgenden Eigenschaften:
 ### 1.3 High-Level-Architektur
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                          CLIENTS                                 │
-│   Web-SPA (React/TS)    │   Externe Systeme (CI/CD, Webhooks)   │
-└──────────┬──────────────────────────────────────┬───────────────┘
-           │ HTTPS/WSS                            │ HTTPS
-           ▼                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              API GATEWAY (Traefik / AWS API Gateway)             │
-│         TLS-Termination, JWT-Validation, Routing, Rate Limit     │
-└──┬───────┬───────┬───────┬───────┬───────┬───────┬──────────────┘
-   │       │       │       │       │       │       │
-   ▼       ▼       ▼       ▼       ▼       ▼       ▼
-┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐
-│Auth│ │Proj│ │Task│ │Doc │ │Notf│ │Plug│ │... │
-└─┬──┘ └─┬──┘ └─┬──┘ └─┬──┘ └─┬──┘ └─┬──┘
-  │      │      │      │      │      │
-  │ DB   │ DB   │ DB   │ DB   │Redis │ DB
-  ▼      ▼      ▼      ▼      ▼      ▼
-                                 │
-        ┌─────────────────────────────────────┐
-        │   RabbitMQ (Event Bus)              │
-        │   Topics: task.*, project.*, ...    │
-        └─────────────────────────────────────┘
-                          │
-                          ▼
-                ┌─────────────────┐
-                │  S3 / MinIO     │  Dokumente
-                └─────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                            CLIENTS                                │
+│  Web-SPA (React/TS)  │  MCP-Client (Claude)  │  Ext. Systeme      │
+└─────────┬──────────────────────┬─────────────────────┬───────────┘
+          │ HTTPS/WSS            │ HTTPS /mcp (PAT)     │ HTTPS
+          ▼                      ▼                      ▼
+┌──────────────────────────────────────────────────────┐   /mcp (stripprefix)   ┌──────────────────┐
+│         API GATEWAY (Traefik / AWS API Gateway)      │ ─────────────────────▶ │   MCP-Server     │
+│  TLS (80 + 443 self-signed) · Routing · RateLimit    │                        │  MCP ↔ REST      │
+│  CORS  — JWT/PAT je Service validiert (Zero-Trust)   │ ◀───────────────────── │  kein DB / Event │
+└──┬─────┬─────┬─────┬─────┬─────┬─────┬───────────────┘  REST /api/v1 (PAT,     └──────────────────┘
+   ▼     ▼     ▼     ▼     ▼     ▼     ▼                   zurück durchs Gateway)
+ Auth  Proj  Task  Doc   Notf  Plug  BoardReg
+  │DB   │DB   │DB   │DB  │Redis │DB    │DB
+  └─────┴─────┴─────┴─────┴─────┴──────┘
+                    │
+        ┌───────────────────────────────────────────────┐
+        │   RabbitMQ (Event Bus)                         │
+        │   Topics: task.*, project.*, boardtype.* ...   │
+        └───────────────────────┬───────────────────────┘
+                    │  outbox → publish / consume (idempotent)
+                    ▼
+            ┌─────────────────┐
+            │  S3 / MinIO     │  Dokumente
+            └─────────────────┘
+
+  Der MCP-Server ist ein hinter Traefik geroutetes Backend (kein Domain-Service): eingehend via
+  /mcp, ausgehend ruft er /api/v1 wieder durchs Gateway. PAT-Auth: Project/Task/Board-Registry lösen
+  "tbpat_"-Tokens synchron über Auth auf (/internal/tokens/introspect, Cache 30s). Siehe §9.1.
 ```
 
 ---
@@ -321,6 +322,14 @@ Status, Default-Config, JSON-Schema). Der Project-Service löst Typen zur Laufze
 internal-API auf (Service-Token, Cache) und invalidiert den Cache auf `boardtype.*`-Events. Details:
 `docs/services/boardregistry.md`.
 
+**MCP-Server (Protokoll-Adapter, kein Domain-Service):** Ein *Backend-for-Frontend / Anti-Corruption
+Layer* für MCP-Clients (Claude Desktop/Code) — er übersetzt MCP-Tool-Aufrufe in die internen
+REST-Verträge und hat daher keine DB, keine Events, keinen Zustand. Deployt als
+Streamable-HTTP-Server hinter Traefik unter `/mcp` (multi-tenant: PAT pro Request), alternativ lokal
+per stdio. Er authentifiziert nicht selbst, sondern reicht ein **Personal Access Token** (§9.1) an
+das Gateway durch und sieht damit genau das, was der Token-Eigentümer sieht. Details:
+`docs/services/mcp-server.md`.
+
 ---
 
 ## 4. Repository-Struktur
@@ -348,26 +357,37 @@ teamboard/
 │   ├── specifications/               # coding-guidelines, shared, orchestration, gateway
 │   └── demo/                         # Notebooks (Board-Typen, Webhooks)
 ├── services/
-│   ├── auth/
-│   │   ├── cmd/server/main.go
-│   │   ├── internal/
-│   │   │   ├── api/                  # HTTP-Handler (Chi)
-│   │   │   ├── domain/               # Geschäftslogik (sprachlich rein)
-│   │   │   ├── repository/           # DB-Zugriff (sqlc-generiert + Wrapper)
-│   │   │   ├── events/               # Event-Publisher
-│   │   │   └── config/
-│   │   ├── migrations/               # golang-migrate
-│   │   ├── queries/                  # sqlc-Input (.sql-Dateien)
-│   │   ├── sqlc.yaml
-│   │   ├── Dockerfile
-│   │   ├── go.mod
-│   │   └── README.md
-│   ├── project/      (gleiche Struktur)
-│   ├── task/         (gleiche Struktur)
-│   ├── document/     (gleiche Struktur)
-│   ├── notification/ (gleiche Struktur)
-│   ├── plugin/       (gleiche Struktur)
-│   └── boardregistry/ (gleiche Struktur)
+│   ├── domain/                       # Domain-Services (eigener Bounded Context, DB, Events)
+│   │   ├── auth/                     #   module: github.com/teamboard/services/domain/auth
+│   │   │   ├── cmd/server/main.go
+│   │   │   ├── internal/
+│   │   │   │   ├── api/              # HTTP-Handler (Chi)
+│   │   │   │   ├── domain/           # Geschäftslogik (sprachlich rein)
+│   │   │   │   ├── repository/       # DB-Zugriff (sqlc-generiert + Wrapper)
+│   │   │   │   ├── events/           # Event-Publisher
+│   │   │   │   └── config/
+│   │   │   ├── migrations/           # golang-migrate
+│   │   │   ├── queries/              # sqlc-Input (.sql-Dateien)
+│   │   │   ├── sqlc.yaml
+│   │   │   ├── Dockerfile
+│   │   │   ├── go.mod
+│   │   │   └── README.md
+│   │   ├── project/      (gleiche Struktur)
+│   │   ├── task/         (gleiche Struktur)
+│   │   ├── document/     (gleiche Struktur)
+│   │   ├── notification/ (gleiche Struktur)
+│   │   ├── plugin/       (gleiche Struktur)
+│   │   └── boardregistry/ (gleiche Struktur)
+│   └── other/                        # Nicht-Domain-Services (Protokoll-Adapter etc.)
+│       └── mcp-server/               # MCP-Adapter (BFF) — kein DB, keine Events. Streamable-HTTP
+│           │                         #   hinter Traefik unter /mcp (multi-tenant: PAT pro Request);
+│           │                         #   alternativ lokal per stdio. module: .../services/other/mcp-server
+│           ├── cmd/mcp-server/main.go # wählt Transport via MCP_TRANSPORT (http | stdio)
+│           ├── internal/
+│           │   ├── teamboard/        # HTTP-Client gegen die Gateway-Routen (PAT als Bearer)
+│           │   └── tools/            # MCP-Tools: Projekte/Boards/Tasks lesen, Board-Typen verwalten
+│           ├── Dockerfile
+│           └── README.md
 ├── shared/
 │   └── go/
 │       ├── authmiddleware/           # JWT-Validierung als Library
@@ -380,16 +400,6 @@ teamboard/
 │   ├── src/
 │   ├── package.json
 │   └── Dockerfile
-├── mcp-server/                       # MCP-Server für Claude Desktop/Code. Kein Domain-Service
-│   │                                 # (kein DB), aber als Streamable-HTTP-Server hinter Traefik
-│   │                                 # unter /mcp deployt (multi-tenant: PAT pro Request im Header).
-│   │                                 # Alternativ lokal per stdio (Single-User, TEAMBOARD_TOKEN).
-│   ├── cmd/mcp-server/main.go        # wählt Transport via MCP_TRANSPORT (http | stdio)
-│   ├── internal/
-│   │   ├── teamboard/                # HTTP-Client gegen die Gateway-Routen (PAT als Bearer)
-│   │   └── tools/                    # MCP-Tools: Projekte/Boards/Tasks lesen, Board-Typen verwalten
-│   ├── Dockerfile
-│   └── README.md
 ├── infra/
 │   └── traefik/                      # Gateway-Konfiguration (lokal + Prod)
 ├── deploy.sh                        # Roll-out auf der EC2-Box (von CI per SSH aufgerufen)
@@ -613,7 +623,7 @@ Schreibende Operationen unterstützen optional `Idempotency-Key`-Header. Server 
 
 ```bash
 oapi-codegen -package=api -generate=types,chi-server \
-  docs/api/task.openapi.yaml > services/task/internal/api/generated.go
+  docs/api/task.openapi.yaml > services/domain/task/internal/api/generated.go
 ```
 
 Die Spec ist Source of Truth — handgeschriebener Code implementiert die generierten Interfaces.
@@ -797,6 +807,15 @@ Detaillierte Schemas inklusive Constraints und Indexes folgen in den Service-spe
 
 **Refresh-Tokens:** Opaque Strings, gespeichert als Hash in DB. Nur über `/auth/refresh` einlösbar.
 
+**Personal Access Tokens (PAT):** Langlebige, vom User selbst verwaltete und **revozierbare**
+Credentials für externe Clients, die sich nicht über den Login-Flow anmelden können — v. a. den
+[MCP-Server](../services/mcp-server.md). Opaque (Präfix `tbpat_`), als SHA-256-Hash gespeichert
+(wie Refresh-Tokens, nicht selbst-validierend wie das Access-JWT). Andere Services akzeptieren sie
+als Bearer, indem `shared/go/authmiddleware` den Präfix erkennt und synchron gegen
+`POST /internal/tokens/introspect` des Auth-Service auflöst (Per-Service-Cache 30s + Circuit-Breaker,
+opt-in via `WithPATIntrospector`). Ein PAT trägt dieselben Rechte wie ein normaler Login (kein
+eigener Scope). Details: [`auth.md` §17](../services/auth.md#17-personal-access-tokens-pat).
+
 ### 9.2 Authorisierung
 
 **Project Service ist Authority** für projektbezogene Permissions. Andere Services rufen synchron an:
@@ -958,8 +977,10 @@ Folgende Detaildokumente werden pro Service ergänzt:
 - `docs/services/document.md`
 - `docs/services/notification.md`
 - `docs/services/plugin.md`
+- `docs/services/boardregistry.md`
+- `docs/services/mcp-server.md` (kein Domain-Service: kein DB-/OpenAPI-/Event-Kapitel)
 
-Jedes Detaildokument enthält:
+Jedes Detaildokument (Domain-Service) enthält:
 - Vollständiges Datenbankschema mit DDL
 - Vollständige OpenAPI-Spec
 - Domain-Modell und Use-Cases

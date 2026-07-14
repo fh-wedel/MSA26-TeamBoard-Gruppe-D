@@ -43,9 +43,9 @@ make test-shared     # Shared library tests (90% coverage required)
 
 **Single-service test:**
 ```bash
-cd services/task && go test -short -race ./...              # unit
-cd services/task && go test -race ./internal/repository/... # integration
-cd services/task && go test -run TestTaskService_CreateTask_HappyPath ./internal/domain/...
+cd services/domain/task && go test -short -race ./...              # unit
+cd services/domain/task && go test -race ./internal/repository/... # integration
+cd services/domain/task && go test -run TestTaskService_CreateTask_HappyPath ./internal/domain/...
 ```
 
 **Linting:**
@@ -87,16 +87,22 @@ Domain services behind a Traefik gateway, communicating asynchronously via Rabbi
 
 ```
 teamboard/
-├── services/<name>/          # One Go module per service
-│   ├── cmd/server/main.go    # Wiring only — no logic
-│   ├── internal/
-│   │   ├── api/              # HTTP handlers, DTOs, middleware
-│   │   ├── domain/           # Business logic — no imports from api/repository/events
-│   │   ├── repository/       # Repository interface (defined in domain/) + postgres impl
-│   │   ├── events/           # Publisher + consumer
-│   │   └── config/
-│   ├── migrations/           # golang-migrate SQL files
-│   └── queries/              # sqlc .sql input files
+├── services/
+│   ├── domain/<name>/        # One Go module per DOMAIN service (auth, project, task,
+│   │   │                     #   document, notification, plugin, boardregistry)
+│   │   │                     #   module: github.com/teamboard/services/domain/<name>
+│   │   ├── cmd/server/main.go # Wiring only — no logic
+│   │   ├── internal/
+│   │   │   ├── api/          # HTTP handlers, DTOs, middleware
+│   │   │   ├── domain/       # Business logic — no imports from api/repository/events
+│   │   │   ├── repository/   # Repository interface (defined in domain/) + postgres impl
+│   │   │   ├── events/       # Publisher + consumer
+│   │   │   └── config/
+│   │   ├── migrations/       # golang-migrate SQL files
+│   │   └── queries/          # sqlc .sql input files
+│   └── other/                # Non-domain services (protocol adapters etc.)
+│       └── mcp-server/       # MCP protocol adapter (BFF) — no DB, no events
+│                             #   module: github.com/teamboard/services/other/mcp-server
 ├── shared/go/                # Cross-cutting libraries used by all services
 │   ├── authmiddleware/       # JWT validation middleware + JWKS cache
 │   ├── eventbus/             # RabbitMQ wrapper (Envelope, Publisher, Consumer)
@@ -177,7 +183,7 @@ Never re-implement what exists in `shared/go/`. Key imports:
 
 Services include `shared/go` via replace directive in `go.mod`:
 ```
-replace github.com/teamboard/shared/go => ../../shared/go
+replace github.com/teamboard/shared/go => ../../../shared/go
 ```
 
 ---

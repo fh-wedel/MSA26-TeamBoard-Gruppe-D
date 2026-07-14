@@ -65,6 +65,7 @@ Domain-Services hinter einem Traefik-Gateway, asynchron gekoppelt über RabbitMQ
 | Notification | 8005 | WebSocket-Push + persistente Notifications (stateful) | [notification.md](docs/services/notification.md) |
 | Plugin/Webhook | 8006 | Webhook-Registrierung, Auslieferung mit Retry + HMAC | [plugin.md](docs/services/plugin.md) |
 | Board Registry | 8007 | **Authority für Board-Typ-Definitionen**, Laufzeit-Registrierung | [boardregistry.md](docs/services/boardregistry.md) |
+| MCP-Server | 8080 (`/mcp`) | TeamBoard als MCP-Tools für Claude Desktop/Code (kein Domain-Service) | [mcp-server.md](docs/services/mcp-server.md) · [README](services/other/mcp-server/README.md) |
 
 **Board-Typen** (kanban/scrum/calendar/gantt + eigene) sind Laufzeit-Daten der Board
 Registry, kein Compile-Zeit-Code. Der Project-Service löst Default-Columns, Default-Config
@@ -88,8 +89,8 @@ make demo-board-types  # registriert scrum + gantt zur Laufzeit (Notebook-Demo)
 Einzelner Service:
 
 ```bash
-cd services/task && go test -short -race ./...               # Unit
-cd services/task && go test -race ./internal/repository/...  # Integration (Docker)
+cd services/domain/task && go test -short -race ./...               # Unit
+cd services/domain/task && go test -race ./internal/repository/...  # Integration (Docker)
 ```
 
 Vollständige Befehlsliste: `make help`.
@@ -100,12 +101,14 @@ Vollständige Befehlsliste: `make help`.
 
 ```
 .
-├── services/<name>/        # ein Go-Modul pro Service (auth, project, task,
-│                           #   document, notification, plugin, boardregistry)
-│   ├── cmd/server/main.go  # Wiring
-│   ├── internal/{api,domain,repository,events,config}/
-│   ├── migrations/         # golang-migrate
-│   └── queries/            # sqlc-Input
+├── services/
+│   ├── domain/<name>/      # ein Go-Modul pro Domain-Service (auth, project, task,
+│   │   │                   #   document, notification, plugin, boardregistry)
+│   │   ├── cmd/server/main.go  # Wiring
+│   │   ├── internal/{api,domain,repository,events,config}/
+│   │   ├── migrations/     # golang-migrate
+│   │   └── queries/        # sqlc-Input
+│   └── other/mcp-server/   # MCP-Protokoll-Adapter (BFF) — kein Domain-Service
 ├── shared/go/              # Cross-Cutting-Libraries (authmiddleware, eventbus,
 │                           #   outbox, observability, httputil, servicetoken)
 ├── frontend/               # React/TypeScript SPA

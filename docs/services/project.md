@@ -269,7 +269,7 @@ CREATE TABLE processed_events (
 ### 3.2 Migrations
 
 ```
-services/project/migrations/
+services/domain/project/migrations/
 ├── 0001_init.up.sql              # Tabellen oben
 ├── 0001_init.down.sql
 ├── 0002_seed_roles.up.sql        # Rollen einfügen
@@ -1309,7 +1309,7 @@ type Config struct {
 ## 12. Verzeichnisstruktur
 
 ```
-services/project/
+services/domain/project/
 ├── cmd/server/main.go
 ├── internal/
 │   ├── api/

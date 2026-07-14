@@ -1293,7 +1293,7 @@ type Config struct {
 ## 13. Verzeichnisstruktur
 
 ```
-services/document/
+services/domain/document/
 ├── cmd/server/main.go
 ├── internal/
 │   ├── api/

@@ -114,7 +114,7 @@ demo-board-types:
 generate:
 	@for svc in $(SERVICES); do \
 		echo "=== Generating $$svc ==="; \
-		(cd services/$$svc && sqlc generate) || true; \
+		(cd services/domain/$$svc && sqlc generate) || true; \
 	done
 	@echo "Generated."
 
@@ -123,13 +123,13 @@ test: test-shared test-unit test-integration
 test-unit:
 	@for svc in $(SERVICES); do \
 		echo "=== Testing $$svc (unit) ==="; \
-		(cd services/$$svc && go test -short -race -cover ./...); \
+		(cd services/domain/$$svc && go test -short -race -cover ./...); \
 	done
 
 test-integration:
 	@for svc in $(SERVICES); do \
 		echo "=== Testing $$svc (integration) ==="; \
-		(cd services/$$svc && go test -race ./internal/repository/... ./internal/events/... 2>/dev/null || true); \
+		(cd services/domain/$$svc && go test -race ./internal/repository/... ./internal/events/... 2>/dev/null || true); \
 	done
 
 test-shared:
@@ -140,13 +140,13 @@ test-shared:
 lint:
 	@for svc in $(SERVICES); do \
 		echo "=== Linting $$svc ==="; \
-		(cd services/$$svc && golangci-lint run ./...); \
+		(cd services/domain/$$svc && golangci-lint run ./...); \
 	done
 	(cd shared/go && golangci-lint run ./...)
 
 lint-fix:
 	@for svc in $(SERVICES); do \
-		(cd services/$$svc && golangci-lint run --fix ./...); \
+		(cd services/domain/$$svc && golangci-lint run --fix ./...); \
 	done
 	(cd shared/go && golangci-lint run --fix ./...)
 

@@ -122,13 +122,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./scripts/run-migrations.sh:/run-migrations.sh:ro
-      - ./services/auth/migrations:/migrations/auth:ro
-      - ./services/project/migrations:/migrations/project:ro
-      - ./services/task/migrations:/migrations/task:ro
-      - ./services/document/migrations:/migrations/document:ro
-      - ./services/notification/migrations:/migrations/notification:ro
-      - ./services/plugin/migrations:/migrations/plugin:ro
-      - ./services/boardregistry/migrations:/migrations/boardregistry:ro
+      - ./services/domain/auth/migrations:/migrations/auth:ro
+      - ./services/domain/project/migrations:/migrations/project:ro
+      - ./services/domain/task/migrations:/migrations/task:ro
+      - ./services/domain/document/migrations:/migrations/document:ro
+      - ./services/domain/notification/migrations:/migrations/notification:ro
+      - ./services/domain/plugin/migrations:/migrations/plugin:ro
+      - ./services/domain/boardregistry/migrations:/migrations/boardregistry:ro
     entrypoint: /bin/sh
     command: /run-migrations.sh
     networks:
@@ -186,7 +186,7 @@ services:
   auth:
     build:
       context: .
-      dockerfile: services/auth/Dockerfile
+      dockerfile: services/domain/auth/Dockerfile
       target: production
     environment:
       SERVICE_NAME: auth-service
@@ -234,7 +234,7 @@ services:
   project:
     build:
       context: .
-      dockerfile: services/project/Dockerfile
+      dockerfile: services/domain/project/Dockerfile
       target: production
     environment:
       LOG_LEVEL: info
@@ -277,7 +277,7 @@ services:
   task:
     build:
       context: .
-      dockerfile: services/task/Dockerfile
+      dockerfile: services/domain/task/Dockerfile
       target: production
     environment:
       LOG_LEVEL: info
@@ -316,7 +316,7 @@ services:
   document:
     build:
       context: .
-      dockerfile: services/document/Dockerfile
+      dockerfile: services/domain/document/Dockerfile
       target: production
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/document_db?sslmode=disable
@@ -359,7 +359,7 @@ services:
   notification:
     build:
       context: .
-      dockerfile: services/notification/Dockerfile
+      dockerfile: services/domain/notification/Dockerfile
       target: production
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/notification_db?sslmode=disable
@@ -398,7 +398,7 @@ services:
   plugin:
     build:
       context: .
-      dockerfile: services/plugin/Dockerfile
+      dockerfile: services/domain/plugin/Dockerfile
       target: production
     environment:
       SERVICE_NAME: plugin-service
@@ -446,7 +446,7 @@ services:
   boardregistry:
     build:
       context: .
-      dockerfile: services/boardregistry/Dockerfile
+      dockerfile: services/domain/boardregistry/Dockerfile
       target: production
     environment:
       SERVICE_NAME: boardregistry-service
@@ -497,7 +497,7 @@ services:
   # calls back into the gateway to reach the domain services.
   mcp-server:
     build:
-      context: ./mcp-server
+      context: ./services/other/mcp-server
       dockerfile: Dockerfile
       target: production
     environment:

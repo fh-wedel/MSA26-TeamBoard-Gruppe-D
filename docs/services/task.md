@@ -345,7 +345,7 @@ CREATE TABLE processed_events (
 ### 3.2 Migrations
 
 ```
-services/task/migrations/
+services/domain/task/migrations/
 ├── 0001_init.up.sql
 └── 0001_init.down.sql
 ```
@@ -1460,7 +1460,7 @@ type Config struct {
 ## 13. Verzeichnisstruktur
 
 ```
-services/task/
+services/domain/task/
 ├── cmd/server/main.go
 ├── internal/
 │   ├── api/

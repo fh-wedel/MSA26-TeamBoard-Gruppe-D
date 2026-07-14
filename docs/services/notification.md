@@ -1193,7 +1193,7 @@ type Config struct {
 ## 14. Verzeichnisstruktur
 
 ```
-services/notification/
+services/domain/notification/
 ├── cmd/server/main.go
 ├── internal/
 │   ├── api/
