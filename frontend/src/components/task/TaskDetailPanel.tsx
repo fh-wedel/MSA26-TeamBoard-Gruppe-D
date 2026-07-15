@@ -6,6 +6,7 @@ import {
 import { tasksApi } from '../../api/tasks'
 import { boardsApi } from '../../api/projects'
 import { useAuthStore } from '../../stores/authStore'
+import { useWebSocket } from '../../hooks/useWebSocket'
 import { format, formatDistanceToNow } from 'date-fns'
 import type { Column, TaskStatus, Priority } from '../../api/types'
 import clsx from 'clsx'
@@ -52,15 +53,37 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
 
+  // staleTime: 0 so opening the panel always shows the latest data, even if the
+  // board list cached an older copy — otherwise an observer clicking a task just
+  // edited by someone else would see stale fields for up to the global staleTime.
   const { data } = useQuery({
     queryKey: ['task', taskId],
     queryFn: () => tasksApi.get(taskId),
+    staleTime: 0,
   })
 
   const { data: commentsData } = useQuery({
     queryKey: ['comments', taskId],
     queryFn: () => tasksApi.listComments(taskId),
+    staleTime: 0,
   })
+
+  // Live updates for this task: edits, comments, and attachment changes made by
+  // other users arrive on the task channel and refresh the open panel in real
+  // time (the board channel only covers the card list on BoardPage).
+  useWebSocket((msg) => {
+    if (msg.type !== 'event') return
+    const eventType: string | undefined = msg.data?.event_type
+    if (!eventType) return
+    if (eventType === 'task.deleted') { onClose(); return }
+    if (eventType.startsWith('task.comment')) {
+      qc.invalidateQueries({ queryKey: ['comments', taskId] })
+    } else if (eventType.startsWith('task.attachment')) {
+      qc.invalidateQueries({ queryKey: ['attachments', taskId] })
+    } else {
+      qc.invalidateQueries({ queryKey: ['task', taskId] })
+    }
+  }, true, [`task:${taskId}`])
 
   const boardId = data?.data?.board_id
   const { data: boardData } = useQuery({

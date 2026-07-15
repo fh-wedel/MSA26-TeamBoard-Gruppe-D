@@ -12,6 +12,7 @@ export default function TaskAttachments({ taskId, projectId }: { taskId: string;
   const { data: attachmentsData } = useQuery({
     queryKey: ['attachments', taskId],
     queryFn: () => tasksApi.listAttachments(taskId),
+    staleTime: 0,
   })
 
   // Resolve document names/types for display — attachments only carry document_id.

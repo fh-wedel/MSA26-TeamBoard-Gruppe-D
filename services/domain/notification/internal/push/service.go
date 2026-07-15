@@ -134,6 +134,11 @@ func (s *Service) checkChannelPermission(ctx context.Context, userID uuid.UUID, 
 		}
 		return nil
 
+	case "boardtypes":
+		// Global board-type registry channel — board types are not project-scoped,
+		// so any authenticated connection may subscribe. The JWT is already verified.
+		return nil
+
 	case "board", "task":
 		// board:{boardID} and task:{taskID} carry no project id we can resolve
 		// synchronously here (the notification service stores no board→project

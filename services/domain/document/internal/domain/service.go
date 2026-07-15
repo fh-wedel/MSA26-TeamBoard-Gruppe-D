@@ -29,13 +29,16 @@ type DocumentService interface {
 	GetDocumentInfo(ctx context.Context, documentID uuid.UUID) (*DocumentInfo, error)
 }
 
-// DocumentInfo is the minimal metadata returned to other services.
+// DocumentInfo is the minimal metadata returned to other services. The JSON
+// tags are required: consumers (e.g. the Task service's document client) decode
+// this over the internal API into snake_case-tagged structs, and Go's field
+// matcher will not map "ProjectID" onto `json:"project_id"`.
 type DocumentInfo struct {
-	ID        uuid.UUID
-	ProjectID uuid.UUID
-	Name      string
-	Exists    bool
-	Active    bool
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	Name      string    `json:"name"`
+	Exists    bool      `json:"exists"`
+	Active    bool      `json:"active"`
 }
 
 // Repository is the persistence interface consumed by the domain.

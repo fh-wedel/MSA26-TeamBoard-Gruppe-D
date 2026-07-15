@@ -45,6 +45,11 @@ func ProjectChannel(id uuid.UUID) Channel     { return Channel("project:" + id.S
 func BoardChannel(id uuid.UUID) Channel       { return Channel("board:" + id.String()) }
 func TaskChannel(id uuid.UUID) Channel        { return Channel("task:" + id.String()) }
 
+// BoardTypesChannel is a global channel for board-type registry changes. Board
+// types are not project-scoped, so any authenticated connection may subscribe to
+// learn about newly registered/updated/removed types in real time.
+func BoardTypesChannel() Channel { return Channel("boardtypes:all") }
+
 // ── Connection (in-memory, not persisted) ─────────────────────────────────────
 
 type Connection struct {

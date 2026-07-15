@@ -77,9 +77,13 @@ func (d *Dispatcher) register() {
 	}
 	d.handlers["task.deleted"] = &taskDeletedHandler{}
 	d.handlers["task.commented"] = &taskCommentedHandler{}
-	d.handlers["task.attachment.added"] = &genericChannelHandler{
-		channelFn: func(p map[string]any) domain.Channel { return domain.TaskChannel(mustUUID(p["task_id"])) },
-	}
+	taskChannelFromPayload := func(p map[string]any) domain.Channel { return domain.TaskChannel(mustUUID(p["task_id"])) }
+	// Comment edits/deletes and attachment changes carry a task_id and are
+	// pushed to the task channel so an open detail view refreshes in real time.
+	d.handlers["task.comment.updated"] = &genericChannelHandler{channelFn: taskChannelFromPayload}
+	d.handlers["task.comment.deleted"] = &genericChannelHandler{channelFn: taskChannelFromPayload}
+	d.handlers["task.attachment.added"] = &genericChannelHandler{channelFn: taskChannelFromPayload}
+	d.handlers["task.attachment.removed"] = &genericChannelHandler{channelFn: taskChannelFromPayload}
 	d.handlers["document.uploaded"] = &genericChannelHandler{
 		channelFn: func(p map[string]any) domain.Channel { return domain.ProjectChannel(mustUUID(p["project_id"])) },
 	}
@@ -92,6 +96,12 @@ func (d *Dispatcher) register() {
 	d.handlers["board.created"] = &genericChannelHandler{
 		channelFn: func(p map[string]any) domain.Channel { return domain.ProjectChannel(mustUUID(p["project_id"])) },
 	}
+	// Board-type registry changes are global (not project-scoped); push them to
+	// the shared board-types channel so every open create-board dialog refreshes.
+	boardTypesChannel := func(map[string]any) domain.Channel { return domain.BoardTypesChannel() }
+	d.handlers["boardtype.registered"] = &genericChannelHandler{channelFn: boardTypesChannel}
+	d.handlers["boardtype.updated"] = &genericChannelHandler{channelFn: boardTypesChannel}
+	d.handlers["boardtype.deleted"] = &genericChannelHandler{channelFn: boardTypesChannel}
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, env Envelope) error {

@@ -8,6 +8,7 @@ import type { BoardTypeDef } from '../../api/types'
 import { formatDistanceToNow } from 'date-fns'
 import SchemaForm from '../../components/board/SchemaForm'
 import { useBoardTypes } from '../../hooks/useBoardTypes'
+import { useWebSocket } from '../../hooks/useWebSocket'
 import { useAuthStore } from '../../stores/authStore'
 import DocumentsPanel from '../../components/documents/DocumentsPanel'
 
@@ -171,6 +172,18 @@ export default function ProjectPage() {
     queryFn: () => projectsApi.listBoards(projectId!),
     enabled: !!projectId,
   })
+
+  // Live updates: a board created (or member changes) by another user on this
+  // project refreshes the list here without a reload.
+  useWebSocket((msg) => {
+    if (msg.type !== 'event') return
+    const eventType: string | undefined = msg.data?.event_type
+    if (eventType === 'board.created') {
+      qc.invalidateQueries({ queryKey: ['boards', projectId] })
+    } else if (eventType?.startsWith('project.member.')) {
+      qc.invalidateQueries({ queryKey: ['members', projectId] })
+    }
+  }, !!projectId, projectId ? [`project:${projectId}`] : [])
 
   // Members are loaded regardless of the active tab so we can derive the current
   // user's role and gate the board/member management actions accordingly.
