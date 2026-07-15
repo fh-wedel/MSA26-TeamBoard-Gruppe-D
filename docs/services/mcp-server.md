@@ -18,7 +18,8 @@ LLM-Client statt einer Web- oder Mobile-App.
 
 Funktional stellt er TeamBoard-Daten als [MCP](https://modelcontextprotocol.io)-Tools bereit,
 damit ein MCP-Client (Claude Desktop, Claude Code) Projekte, Boards, Tasks und Board-Typen eines
-Users **lesen und teilweise verwalten** kann — authentifiziert über ein
+Users **lesen und vollständig verwalten** kann (derselbe CRUD-Umfang wie die Web-UI, §2) —
+authentifiziert über ein
 [Personal Access Token (PAT)](auth.md#17-personal-access-tokens-pat) statt über eine Login-Session.
 Weil er ausschließlich das User-PAT nutzt (on-behalf-of) und **kein** internes Service-Token, bleibt
 er ein Edge-Consumer im Zero-Trust-Sinn und erhält keine erweiterte Vertrauensstellung.
@@ -43,25 +44,52 @@ er ein Edge-Consumer im Zero-Trust-Sinn und erhält keine erweiterte Vertrauenss
 
 ## 2. Tools
 
-Registriert in `internal/tools/tools.go`; der HTTP-Client liegt in `internal/teamboard/`.
+Registriert in `internal/tools/` (eine Datei pro Ressource: `projects.go`, `boards.go`,
+`boardtypes.go`, `tasks.go`; `tools.go` hält `Register` + Helfer); der HTTP-Client liegt in
+`internal/teamboard/`. Die Tools decken denselben CRUD-Umfang ab wie das Web-Frontend
+(`frontend/src/api/`), sodass ein LLM-Client TeamBoard vollständig steuern kann.
 
 | Tool | Art | Ziel-Route (Gateway) | Zweck |
 |------|-----|----------------------|-------|
 | `list_projects` | read | `GET /api/v1/projects` | Projekte, in denen der User Mitglied ist |
+| `create_project` | **write** | `POST /api/v1/projects` | Projekt anlegen (User wird Owner) |
+| `update_project` | **write** | `PATCH /api/v1/projects/{id}` | Name/Beschreibung ändern |
+| `delete_project` | **write** | `DELETE /api/v1/projects/{id}` | Projekt inkl. Boards/Tasks löschen |
+| `list_project_members` | read | `GET /api/v1/projects/{id}/members` | Mitglieder (User-IDs für `assign_task`) |
 | `list_boards` | read | `GET /api/v1/projects/{id}/boards` | Boards, optional auf ein Projekt beschränkt |
 | `get_board` | read | `GET /api/v1/boards/{id}` | Board-Detail (Spalten, Typ) |
+| `create_board` | **write** | `POST /api/v1/projects/{id}/boards` | Board jedes registrierten Typs anlegen; Spalten seedet der Project Service aus der Registry |
+| `update_board` | **write** | `PATCH /api/v1/boards/{id}` | Board umbenennen / Config ersetzen |
+| `delete_board` | **write** | `DELETE /api/v1/boards/{id}` | Board inkl. Tasks löschen |
 | `list_tasks` | read | `GET /api/v1/boards/{id}/tasks` | Tasks eines Boards, optional nach Status/Spalte gefiltert |
 | `get_task` | read | `GET /api/v1/tasks/{id}` | Task-Detail |
+| `create_task` | **write** | `POST /api/v1/boards/{id}/tasks` | Task anlegen (nur `title` Pflicht; Priority default `medium`; Datumsangaben `YYYY-MM-DD` oder RFC 3339) |
+| `update_task` | **write** | `PATCH /api/v1/tasks/{id}` | Titel, Beschreibung, Priorität, Status, Start-/Fälligkeitsdatum, Labels (Merge-Patch; `clear_*`-Flags entfernen Daten) |
+| `move_task` | **write** | `POST /api/v1/tasks/{id}/move` | Task in andere Spalte ziehen — Status folgt der Zielspalte (Kanban-Drag) |
+| `assign_task` | **write** | `POST /api/v1/tasks/{id}/assign` | Assignee setzen oder entfernen |
+| `delete_task` | **write** | `DELETE /api/v1/tasks/{id}` | Task löschen |
+| `list_comments` | read | `GET /api/v1/tasks/{id}/comments` | Kommentare eines Tasks |
+| `create_comment` | **write** | `POST /api/v1/tasks/{id}/comments` | Kommentar schreiben |
 | `list_board_types` | read | `GET /api/v1/board-types` | Board-Typ-Katalog (built-in + custom) |
 | `register_board_type` | **write** | `POST /api/v1/board-types` | Neuen Custom-Board-Typ registrieren |
 | `delete_board_type` | **write** | `DELETE /api/v1/board-types/{type}` | Custom-Board-Typ löschen |
 
-Die beiden Schreib-Tools spiegeln, was `docs/demo/presentation-board-registry.ipynb` interaktiv
-tut — dieselben Board-Registry-Routen, nur aus einem LLM heraus aufrufbar. Für sie gilt dieselbe
-offene Authz-Stelle wie für alle Board-Registry-Schreibrouten: derzeit für **jeden**
+Zwei UX-Entscheidungen im Adapter (nicht im Backend):
+
+- **`create_task` ohne `column_id`** holt das Board und wählt dessen erste Spalte, damit der Task
+  auf Spalten-Boards sichtbar ist (die Web-UI erstellt immer in eine Spalte). Boards ohne Spalten
+  (z. B. Kalender) bekommen wie im Web einen spaltenlosen Task.
+- **Status vs. Spalte:** `update_task` kann den Status direkt patchen, verschiebt die Karte aber
+  nicht — die Tool-Beschreibung verweist deshalb für Spalten-Boards auf `move_task`, das wie der
+  Kanban-Drag den Status aus der Zielspalte ableitet (`task.status.changed`-Event in beiden Fällen).
+
+`register_board_type`/`delete_board_type` spiegeln, was `docs/demo/presentation-board-registry.ipynb`
+interaktiv tut — dieselben Board-Registry-Routen, nur aus einem LLM heraus aufrufbar. Für sie gilt
+dieselbe offene Authz-Stelle wie für alle Board-Registry-Schreibrouten: derzeit für **jeden**
 authentifizierten Aufrufer offen (siehe [`boardregistry.md` §3](boardregistry.md) und `docs/TODO.md`).
-Ein PAT hat volle User-Rechte, kein Scope — die Tools sind dadurch nicht enger begrenzt als der
-Web-Client desselben Users.
+Für alle übrigen Schreib-Tools prüfen die Domain-Services die Projekt-Permissions des PAT-Owners —
+ein PAT hat volle User-Rechte, kein Scope; die Tools sind dadurch weder enger noch weiter begrenzt
+als der Web-Client desselben Users.
 
 ---
 

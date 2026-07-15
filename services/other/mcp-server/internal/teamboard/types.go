@@ -58,6 +58,27 @@ type Task struct {
 	AttachmentCount int        `json:"attachment_count"`
 }
 
+// Comment mirrors services/task/internal/api/dto.go's commentResponse.
+type Comment struct {
+	ID        string     `json:"id"`
+	TaskID    string     `json:"task_id"`
+	AuthorID  string     `json:"author_id"`
+	Body      string     `json:"body"`
+	Mentions  []string   `json:"mentions"`
+	EditedAt  *time.Time `json:"edited_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// Member mirrors services/project/internal/api/dto.go's memberResponse.
+type Member struct {
+	ProjectID string    `json:"project_id"`
+	UserID    string    `json:"user_id"`
+	Email     string    `json:"email,omitempty"`
+	Role      string    `json:"role"`
+	InvitedBy *string   `json:"invited_by,omitempty"`
+	JoinedAt  time.Time `json:"joined_at"`
+}
+
 // ColumnDef mirrors services/boardregistry/internal/api/dto.go's columnDefDTO —
 // the default columns a board type is created with.
 type ColumnDef struct {

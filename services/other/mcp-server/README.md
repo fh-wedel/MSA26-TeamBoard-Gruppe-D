@@ -95,13 +95,31 @@ go build -o mcp-server.exe ./cmd/mcp-server   # Windows  (drop .exe on macOS/Lin
 | Tool | Description |
 |------|-------------|
 | `list_projects` | List all projects you're a member of |
+| `create_project` | Create a project (you become its owner) |
+| `update_project` | Rename a project / change its description |
+| `delete_project` | Permanently delete a project with all boards and tasks |
+| `list_project_members` | List a project's members (user IDs, emails, roles) |
 | `list_boards` | List boards, optionally scoped to one project |
 | `get_board` | Get a board's detail (columns, type) |
+| `create_board` | Create a board of any registered type; columns seeded from the type's defaults |
+| `update_board` | Rename a board / replace its config |
+| `delete_board` | Permanently delete a board and its tasks |
 | `list_tasks` | List tasks on a board, optionally filtered by status/column |
 | `get_task` | Get full detail for one task |
+| `create_task` | Create a task (title required; priority defaults to medium; start/due date optional) |
+| `update_task` | Edit title, description, priority, status, start/due date, labels |
+| `move_task` | Move a task into another column — status follows the column (kanban drag&drop) |
+| `assign_task` | Assign a task to a member, or unassign it |
+| `delete_task` | Permanently delete a task |
+| `list_comments` | List a task's comments |
+| `create_comment` | Write a comment on a task |
 | `list_board_types` | List the board-type catalog (built-in + custom) |
 | `register_board_type` | Register a new custom board type (e.g. a Gantt/timeline board) |
 | `delete_board_type` | Delete a custom board type |
+
+All write tools call the same gateway routes as the web frontend, under the PAT
+owner's identity — permissions are enforced by the domain services exactly as in
+the browser.
 
 `register_board_type`/`delete_board_type` mirror what
 [`docs/demo/presentation-board-registry.ipynb`](../docs/demo/presentation-board-registry.ipynb)
