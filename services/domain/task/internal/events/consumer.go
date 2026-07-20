@@ -20,6 +20,7 @@ func BindingKeys() []string {
 		"column.updated",
 		"column.deleted",
 		"project.deleted",
+		"project.member.removed",
 		"document.deleted",
 	}
 }
@@ -53,6 +54,8 @@ func (h *EventHandler) Handle(ctx context.Context, env eventbus.Envelope) error 
 		return h.handleColumnDeleted(ctx, env.Payload)
 	case "project.deleted":
 		return h.handleProjectDeleted(ctx, env.Payload)
+	case "project.member.removed":
+		return h.handleMemberRemoved(ctx, env.Payload)
 	case "document.deleted":
 		return h.handleDocumentDeleted(ctx, env.Payload)
 	}
@@ -205,6 +208,48 @@ func (h *EventHandler) handleProjectDeleted(ctx context.Context, body []byte) er
 	}
 	_, err = h.repo.SoftDeleteTasksByProject(ctx, projectID)
 	return err
+}
+
+// handleMemberRemoved unassigns the removed member from every task in the
+// project they were removed from. Membership is project-scoped (a "board member"
+// is a project member), so removal from the project clears their assignments on
+// all of that project's boards. A `task.unassigned` event is emitted per affected
+// task so notification/live-update consumers refresh the board in real time.
+// (user.deleted still clears assignments across all projects — see above.)
+func (h *EventHandler) handleMemberRemoved(ctx context.Context, body []byte) error {
+	var payload struct {
+		ProjectID string `json:"project_id"`
+		UserID    string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return err
+	}
+	projectID, err := uuid.Parse(payload.ProjectID)
+	if err != nil {
+		return err
+	}
+	userID, err := uuid.Parse(payload.UserID)
+	if err != nil {
+		return err
+	}
+
+	return h.repo.WithTransaction(ctx, func(ctx context.Context, tx domain.Repository) error {
+		taskIDs, err := tx.ClearAssigneeForUserInProject(ctx, userID, projectID)
+		if err != nil {
+			return err
+		}
+		for _, taskID := range taskIDs {
+			eventPayload, _ := json.Marshal(map[string]any{
+				"task_id": taskID, "project_id": projectID,
+				"assignee_id": nil, "previous_assignee_id": userID,
+				"reason": "member_removed",
+			})
+			if err := tx.InsertOutboxEvent(ctx, uuid.New(), taskID, "task.unassigned", eventPayload); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (h *EventHandler) handleDocumentDeleted(ctx context.Context, body []byte) error {

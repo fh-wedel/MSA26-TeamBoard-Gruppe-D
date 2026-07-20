@@ -1351,6 +1351,7 @@ components:
 | `column.updated` | project | UPDATE |
 | `column.deleted` | project | DELETE; Tasks in Spalte → `column_id` auf NULL |
 | `project.deleted` | project | UPDATE alle Tasks dieses Projekts auf `deleted_at = NOW()`, Outbox-Events `task.deleted` |
+| `project.member.removed` | project | `assignee_id` wird auf NULL gesetzt für alle Tasks dieses Projekts, die dem entfernten Member zugewiesen waren (mit `task.unassigned`-Event pro Task, `reason: "member_removed"`) |
 | `document.deleted` | document | DELETE betroffene `task_attachments`, Outbox-Event `task.attachment.removed` |
 
 ### 11.3 Idempotenz

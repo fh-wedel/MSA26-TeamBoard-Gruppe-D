@@ -31,6 +31,7 @@ type Querier interface {
 	SoftDeleteTasksByProject(ctx context.Context, projectID uuid.UUID) ([]struct{ ID, ProjectID uuid.UUID }, error)
 	SoftDeleteTasksByBoard(ctx context.Context, boardID uuid.UUID) ([]struct{ ID, ProjectID uuid.UUID }, error)
 	ClearAssigneeForUser(ctx context.Context, userID uuid.UUID) ([]struct{ ID, ProjectID uuid.UUID }, error)
+	ClearAssigneeForUserInProject(ctx context.Context, userID, projectID uuid.UUID) ([]struct{ ID, ProjectID uuid.UUID }, error)
 	NullifyColumnReferences(ctx context.Context, columnID uuid.UUID) error
 
 	// Comments

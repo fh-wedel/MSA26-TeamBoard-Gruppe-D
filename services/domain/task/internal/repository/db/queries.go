@@ -181,6 +181,15 @@ func (q *queries) ClearAssigneeForUser(ctx context.Context, userID uuid.UUID) ([
 	return scanIDProjectPairs(q.db.Query(ctx, clearAssigneeForUser, userID))
 }
 
+const clearAssigneeForUserInProject = `
+UPDATE tasks SET assignee_id=NULL,updated_at=NOW()
+WHERE assignee_id=$1 AND project_id=$2 AND deleted_at IS NULL
+RETURNING id, project_id`
+
+func (q *queries) ClearAssigneeForUserInProject(ctx context.Context, userID, projectID uuid.UUID) ([]struct{ ID, ProjectID uuid.UUID }, error) {
+	return scanIDProjectPairs(q.db.Query(ctx, clearAssigneeForUserInProject, userID, projectID))
+}
+
 const nullifyColumnReferences = `UPDATE tasks SET column_id=NULL,updated_at=NOW() WHERE column_id=$1`
 
 func (q *queries) NullifyColumnReferences(ctx context.Context, columnID uuid.UUID) error {

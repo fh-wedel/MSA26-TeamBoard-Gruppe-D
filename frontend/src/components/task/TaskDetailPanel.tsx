@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  X, Trash2, MessageSquare, Clock, Tag, AlertTriangle, Send, Pencil
+  X, Trash2, MessageSquare, Clock, Tag, AlertTriangle, Send, Pencil, User
 } from 'lucide-react'
 import { tasksApi } from '../../api/tasks'
-import { boardsApi } from '../../api/projects'
+import { boardsApi, projectsApi } from '../../api/projects'
 import { useAuthStore } from '../../stores/authStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { format, formatDistanceToNow } from 'date-fns'
@@ -92,6 +92,17 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
     enabled: !!boardId,
   })
 
+  // Board members are project members — the assignee picker lets you assign the
+  // task to any of them (or unassign). Only project members are valid assignees
+  // server-side, so the list matches exactly what the Task service will accept.
+  const projectId = data?.data?.project_id
+  const { data: membersData } = useQuery({
+    queryKey: ['members', projectId],
+    queryFn: () => projectsApi.listMembers(projectId!),
+    enabled: !!projectId,
+  })
+  const members = membersData?.data ?? []
+
   const updateTask = useMutation({
     mutationFn: (patch: Parameters<typeof tasksApi.update>[1]) => tasksApi.update(taskId, patch),
     onSuccess: (res) => {
@@ -102,6 +113,14 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
 
   const moveTask = useMutation({
     mutationFn: (columnId: string) => tasksApi.move(taskId, columnId),
+    onSuccess: (res) => {
+      qc.setQueryData(['task', taskId], res)
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+
+  const assignTask = useMutation({
+    mutationFn: (assigneeId: string | null) => tasksApi.assign(taskId, assigneeId),
     onSuccess: (res) => {
       qc.setQueryData(['task', taskId], res)
       qc.invalidateQueries({ queryKey: ['tasks'] })
@@ -224,6 +243,20 @@ export default function TaskDetailPanel({ taskId, onClose }: { taskId: string; o
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Assignee */}
+            <div className="col-span-2">
+              <p className="label mb-1.5 flex items-center gap-1"><User size={11} /> Assignee</p>
+              <select value={task.assignee_id ?? ''}
+                onChange={(e) => assignTask.mutate(e.target.value || null)}
+                disabled={assignTask.isPending}
+                className="input-base w-full text-xs">
+                <option value="">Unassigned</option>
+                {members.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>{m.email ?? m.user_id}</option>
+                ))}
+              </select>
             </div>
 
             {/* Start / Due dates */}

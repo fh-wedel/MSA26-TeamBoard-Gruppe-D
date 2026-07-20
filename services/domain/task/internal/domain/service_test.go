@@ -233,6 +233,19 @@ func (r *fakeRepo) ClearAssigneeForUser(_ context.Context, userID uuid.UUID) ([]
 	return ids, nil
 }
 
+func (r *fakeRepo) ClearAssigneeForUserInProject(_ context.Context, userID, projectID uuid.UUID) ([]uuid.UUID, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var ids []uuid.UUID
+	for _, t := range r.tasks {
+		if t.AssigneeID != nil && *t.AssigneeID == userID && t.ProjectID == projectID {
+			t.AssigneeID = nil
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids, nil
+}
+
 func (r *fakeRepo) NullifyColumnReferences(_ context.Context, columnID uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

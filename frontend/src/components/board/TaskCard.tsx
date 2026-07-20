@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { MessageSquare, Paperclip, Calendar, AlertCircle } from 'lucide-react'
+import { MessageSquare, Paperclip, Calendar, AlertCircle, User } from 'lucide-react'
 import { format, isPast } from 'date-fns'
 import { useUIStore } from '../../stores/uiStore'
 import type { CardSpec, Task } from '../../api/types'
@@ -100,6 +100,13 @@ export default function TaskCard({ task, card }: { task: Task; card?: CardSpec }
           {show('attachment_count') && task.attachment_count > 0 && (
             <span className="flex items-center gap-0.5 text-[10px] text-text-3">
               <Paperclip size={10} /> {task.attachment_count}
+            </span>
+          )}
+          {task.assignee_id && (
+            <span
+              title={`Assigned to ${task.assignee_id}`}
+              className="w-4 h-4 rounded-full bg-accent/15 border border-accent/30 flex items-center justify-center text-accent">
+              <User size={9} />
             </span>
           )}
         </div>

@@ -87,6 +87,11 @@ UPDATE tasks SET assignee_id = NULL, updated_at = NOW()
 WHERE assignee_id = $1 AND deleted_at IS NULL
 RETURNING id, project_id;
 
+-- name: ClearAssigneeForUserInProject :many
+UPDATE tasks SET assignee_id = NULL, updated_at = NOW()
+WHERE assignee_id = $1 AND project_id = $2 AND deleted_at IS NULL
+RETURNING id, project_id;
+
 -- name: NullifyColumnReferences :exec
 UPDATE tasks SET column_id = NULL, updated_at = NOW()
 WHERE column_id = $1;
