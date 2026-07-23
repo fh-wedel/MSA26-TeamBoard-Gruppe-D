@@ -4,6 +4,7 @@
 - **Kontext-Datum:** 2026-06-16
 - **Betrifft:** Board-Registry-Service, Frontend (Board-Rendering)
 - **Baut auf:** [ADR 0001](0001-board-type-extensibility.md)
+- **Fortgeführt in:** [ADR 0003](0003-remote-board-views.md) (`view:"remote"`)
 
 ## Kontext und Problemstellung
 
@@ -30,7 +31,8 @@ Spektrum von *rein deklarativ (eingebaute Renderer)* bis *Remote-Code-Ausführun
   `card`; eingebaute Renderer interpretieren die Spec. Hohe Steuerbarkeit (Feld-Bindung, Gruppierung,
   Card-Felder/Farben), sicher, vollständig zur Laufzeit. Neue *Paradigmen* erfordern ein
   Frontend-Release, neue *Typen auf bestehendem Paradigma* nicht.
-- **Option D — Remote-Module / Module Federation:** Definition referenziert remote JS-Bundle. Volle
+- **Option D — Remote-Module / Module Federation:** Definition referenziert ein remote JS-Bundle, das
+  im Host-Origin läuft und daher eine starke Integrity-Prüfung (SRI-/Signatur-Pinning) erfordert; volle
   beliebige UI, aber hoher Sicherheits-/Versionierungs-/Betriebsaufwand.
 - **Option E — iframe-Micro-Frontend + SDK:** Externe URL, sandboxed. Stark isoliert, aber
   Integrations-/UX-Kosten.
