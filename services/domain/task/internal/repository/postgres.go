@@ -198,6 +198,18 @@ func (r *postgresRepo) ClearAssigneeForUser(ctx context.Context, userID uuid.UUI
 	return ids, nil
 }
 
+func (r *postgresRepo) ClearAssigneeForUserInProject(ctx context.Context, userID, projectID uuid.UUID) ([]uuid.UUID, error) {
+	pairs, err := r.q.ClearAssigneeForUserInProject(ctx, userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(pairs))
+	for i, p := range pairs {
+		ids[i] = p.ID
+	}
+	return ids, nil
+}
+
 func (r *postgresRepo) NullifyColumnReferences(ctx context.Context, columnID uuid.UUID) error {
 	return r.q.NullifyColumnReferences(ctx, columnID)
 }
