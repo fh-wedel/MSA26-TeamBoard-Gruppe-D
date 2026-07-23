@@ -29,6 +29,23 @@
 
 \newcommand{\tabitem}{~~\llap{\textbullet}~~}
 
+%%%%%%%%%%%%%%%%%%%  Platzhalter-Hilfen fuer den Bericht  %%%%%%%%%%%%%%%%%%
+% Rahmen-Box als Platzhalter fuer noch zu erstellende Abbildungen oder Plots.
+% #1 Hoehe (z.B. 6cm), #2 Bildunterschrift, #3 Label
+\newcommand{\platzhalterabb}[3]{%
+  \begin{figure}[ht]
+    \centering
+    \setlength{\fboxsep}{0pt}%
+    \fbox{\begin{minipage}[c][#1][c]{0.92\linewidth}%
+      \centering\itshape\color{codegray} Platzhalter: #2
+    \end{minipage}}%
+    \caption{#2}%
+    \label{#3}%
+  \end{figure}%
+}
+% Sichtbarer Hinweis auf im Bericht noch auszuarbeitende Inhalte.
+\newcommand{\ausarbeiten}[1]{\textcolor{codered}{\textbf{[noch auszuarbeiten: #1]}}}
+
 \usepackage{ifpdf}
 \ifpdf
   \usepackage{ae}               % Fonts für pdfLaTeX, falls keine cm-super-Fonts installiert
@@ -37,6 +54,10 @@
 \else
   \usepackage[dvips]{graphicx}  % Grafiken und normales LaTeX
 \fi
+
+%%%%%%%%%%%%%%%%%%%  TikZ fuer Diagramme  %%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc}
 
 \usepackage[a4paper,%
     %bindingoffset=0.5cm,%

@@ -144,7 +144,7 @@
 
   <!-- Plugin -->
   <g filter="url(#shadow)"><rect x="895" y="346" width="159" height="128" rx="14" fill="#ffffff" stroke="#e2e8f0"/><rect x="895" y="346" width="159" height="6" rx="3" fill="#10b981"/></g>
-  <text x="911" y="380" font-size="14" font-weight="700" fill="#1e293b">Webhook</text>
+  <text x="911" y="380" font-size="14" font-weight="700" fill="#1e293b">Plugin</text>
   <rect x="1002" y="364" width="44" height="20" rx="10" fill="#d1fae5"/><text x="1024" y="378" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">8006</text>
   <text x="911" y="404" font-size="10.5" fill="#475569">Webhook registry</text>
   <text x="911" y="420" font-size="10.5" fill="#475569">HMAC · retry · breaker</text>

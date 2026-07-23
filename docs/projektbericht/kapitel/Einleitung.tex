@@ -4,8 +4,57 @@
 \section{Kontext}
 \label{sec:kontext}
 
+Dieser Projektbericht entsteht im Rahmen des Moduls \enquote{Moderne Softwarearchitekturen} im Sommersemester 2026 an der FH Wedel. Die Aufgabe bestand darin, ein web-basiertes Kollaborationssystem als komponentenbasiertes Microservice-System zu entwerfen und umzusetzen. Das Ergebnis ist \emph{TeamBoard}, eine Plattform, die Teams bei der gemeinsamen Verwaltung von Aufgaben, der Ablage von Dokumenten und der Kommunikation unterstützt.
+
+Der Schwerpunkt der Aufgabenstellung liegt ausdrücklich nicht auf einem möglichst großen Funktionsumfang, sondern auf einer tragfähigen und skalierbaren Architektur. Bewertet wird die Struktur des Systems und nicht die Anzahl seiner Merkmale. Aus dieser Lesart folgt der gesamte Zuschnitt des Projekts. Die fachliche Funktionalität bleibt bewusst schlank, während die architektonischen Muster in der Tiefe ausgearbeitet werden. Jede Entscheidung über den Umfang einer Funktion wurde entlang dieser Priorität getroffen.
+
+Drei Leitfragen haben den Entwurf von Beginn an bestimmt und ziehen sich als roter Faden durch diesen Bericht.
+
+\begin{enumerate}
+  \item Wie lassen sich Echtzeit-Ereignisse in einer verteilten Architektur effizient verteilen?
+  \item Wie können Dienste unabhängig voneinander skaliert werden?
+  \item Wie bleibt der Datenzugriff dabei konsistent?
+\end{enumerate}
+
+Auf diese Fragen kommt das Fazit in \vref{chap:fazit} zurück und bewertet, wie gut die gewählte Architektur sie beantwortet.
+
+Sämtliche Artefakte des Projekts liegen im öffentlichen Repository der Gruppe. Dazu zählen der Quellcode, die Architektur- und Service-Dokumentation, die Deployment-Beschreibung sowie die Zeichnungen und Diagramme.\footnote{\url{https://github.com/fh-wedel/MSA26-TeamBoard-Gruppe-D}} Der vorliegende Bericht verweist an den passenden Stellen auf diese Artefakte, statt sie vollständig wiederzugeben.
+
 \section{Aufgabenverteilung im Team}
 \label{sec:aufgabenverteilung}
 
+Das Projekt wurde von einem Team aus drei Personen bearbeitet. Die Architektur und die zentralen Entwurfsentscheidungen wurden gemeinsam erarbeitet und in regelmäßigen Abstimmungen weiterentwickelt. Für die Umsetzung übernahm jedes Mitglied die Verantwortung für einzelne Bereiche, wie \vref{tab:aufgabenverteilung} nach Schwerpunkten aufschlüsselt.
+
+% TODO Team: Namen je Schwerpunkt bitte eintragen.
+\begin{table}[ht]
+  \centering
+  \caption{Aufgabenverteilung nach Schwerpunkten}
+  \label{tab:aufgabenverteilung}
+  \begin{tabularx}{\linewidth}{@{}lX@{}}
+    \toprule
+    \textbf{Schwerpunkt} & \textbf{Teilnehmer} \\
+    \midrule
+    Architektur (allgemein)          & Maximilian Cwik, Henry Müller, Jan Soetebeer \\
+    \midrule
+    Auth-Service                     & Henry Müller \\
+    Project-Service                  & Henry Müller \\
+    Task-Service                     & Henry Müller \\
+    Document-Service                 & Henry Müller \\
+    Notification-Service             & Henry Müller \\
+    Plugin-Service                   & Henry Müller \\
+    Board-Registry-Service           & Henry Müller \\
+    MCP-Server                       & Maximilian Cwik \\
+    \midrule
+    Frontend                         & Maximilian Cwik, Henry Müller, Jan Soetebeer \\
+    Deployment                       & Maximilian Cwik \\
+    Projektbericht und Präsentation  & Maximilian Cwik, Henry Müller, Jan Soetebeer \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
 \section{Einsatz von KI im Projekt}
 \label{sec:ki-einsatz}
+
+Künstliche Intelligenz war in diesem Projekt kein Randthema, sondern ein durchgängiges Arbeitsmittel. Zum Einsatz kam Claude Code in der Version Opus 4.8, eingesetzt als Agent direkt im Repository. Die KI unterstützte alle Phasen der Arbeit, von der Planung einzelner Inkremente über die Erstellung der Spezifikationen bis hin zur Implementierung und der Pflege der Dokumentation.
+
+Ein wesentlicher Nutzen lag in der Konsistenz über alle sieben Dienste hinweg. Gleiche Strukturen, Muster und Fehlerbehandlungen ließen sich durch klar formulierte Vorgaben zuverlässig durchsetzen. An dieser Stelle wird der Einsatz nur benannt. Eine ausführliche Reflexion der Chancen und Grenzen dieses Vorgehens folgt in \vref{sec:ki-programmerstellung}.
