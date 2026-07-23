@@ -1,0 +1,59 @@
+Projektbericht Moderne Softwarearchitekturen 2026
+
+    spätester Abgabetermin: 31. Juli 2026
+    jedes Team gibt einen Projektbericht ab
+    Umfang: 20-25 Seiten als PDF-Dokument (beliebige Werkzeuge für die Dokumenterstellung)
+    Abgabe in Moodle
+
+Die Ergebnisse des Projekts werden in Team-spezifischen Projektberichten dargestellt. Diese Berichte sind nicht chronologisch und stellen auch nur die letztendlich realisiert Lösung vor. Insbesondere die nachvollziehbare Darstellung der Architektur, ihrer Eigenschaften und den Überlegungen, die zur Architektur geführt haben sind wesentlich.
+
+Der Bericht selbst sollte einen Umfang von ca. 20-25 Seiten haben. Er sollte insbesondere auch auf das Repository verweisen (Deployment-Dokument, Zeichnungen, Programmcode, u.a.). 
+
+Aus dem Projektbericht sollen die Aufgabenbereiche der Teilnehmer:innen deutlich werden. 
+
+Der Bericht darf gerne Screenshots, Skizzen, Bilder, Zeichnungen zur Illustration der Ideen und der Realisierung beinhalten.
+
+Daumenregel: Kommilitonen Ihrer Kohorte (Master Inf/Winf) sollen den Bericht verstehen und von Ihrem Projekten beeindruckt sein.
+
+Schreiben Sie in den Projektbericht die Dinge hinein, die Sie für andere als wichtig erachten, die das Projekt fortschreiben wollen.
+
+Typische Gliederung
+
+    Deckblatt mit Namen des Projekts, den Team-Mitgliedern
+
+    Einleitung
+        Beschreibung des Kontextes
+        Darstellung der Aufgabenverteilung innerhalb des Teams, ggf. durch eine Tabelle
+        Einsatz von KI im Projekt benennen
+
+    Projektbeschreibung
+        Ihre Interpretation der Aufgabenstellung (Lastenheft)
+        Formulierung der funktionalen/nichtfunktionalen Anforderungen
+        User-Stories
+
+    Entwurf
+        Vorstellung und Diskussion der gewählten Architektur
+        Architekturbild mit Darstellung der einzelnen Komponenten, ihren Aufgaben und ihrer Interaktion untereinander
+        Erläuterung des Gesamt-Systems:
+            Vorstellung der einzelnen Komponente
+            Darstellung des Zusammenspiels
+        Verweise auf das Projekt-Repository in dem weitere Projekt-Artefakte zu finden sind (s.u.).
+
+    Realisierung/Implementierung
+        Benennen des gewählten Software-Stacks
+        Vorgehen bei der Programmerstellung
+        Diskussion und Reflektion des Einsatzes von KI bei der Programmerstellung
+        Herausforderung bei der Realisierung (etwa im Projektmanagement, Zeiten, Inhalte, Aufgaben)
+
+    Deployment/Evaluation
+        Voraussetzungen und Start des System (idealer weise mit einem einzigen Kommando)
+        Vorstellung des laufenden Systems
+        Beschreibung des realisierten Funktionsumfangs
+
+    Fazit, Ausblick
+        Zusammenfassende Bewertung und Blick in zukünftige Entwicklungsmöglichkeiten
+
+    Quellenverzeichnis
+
+    Repository
+        Artefakte (Deployment-Dokumente, Programme, Skizzen, Screenshots, Logs, Dokumente) sollen gerne in einem Repository gesammelt werden. Der Projektbericht verweist auf dieses Repository.
