@@ -1,11 +1,167 @@
 \chapter{Deployment und Evaluation}
 \label{chap:deployment}
 
+Dieses Kapitel beschreibt, wie das System gestartet und betrieben wird, wie es sich im laufenden Zustand darstellt und welcher Funktionsumfang tatsächlich realisiert ist. Ein Leitgedanke zieht sich durch den gesamten Betriebsteil. Sowohl der lokale Start als auch das Ausrollen in die Cloud sollen ohne manuelle Einrichtungsschritte auskommen. Die ausführliche Spezifikation der Pipeline liegt im Repository unter \path{docs/specifications/deployment.md} und wird hier nur zusammengefasst.
+
 \section{Voraussetzungen und Start des Systems}
 \label{sec:start}
+
+Lokal genügen Docker mit Compose-Plugin, \texttt{make} und Python~3 für die Hilfsskripte. Go und Node werden nur benötigt, wenn ein Dienst außerhalb von Docker gebaut werden soll. Das gesamte System startet mit einem einzigen Kommando.
+
+\begin{lstlisting}[
+    caption={Start des vollständigen Systems},
+    label={lst:make-up},
+    frame=single,
+    rulecolor=\color{codegray},
+    backgroundcolor=\color{backcolour},
+    xleftmargin=6pt,   framexleftmargin=6pt,
+    xrightmargin=6pt,  framexrightmargin=6pt,
+    framextopmargin=3pt,
+    framexbottommargin=3pt,
+    basicstyle=\small\ttfamily,
+    belowskip=0.15cm
+]
+make up
+\end{lstlisting}
+
+Dieses Kommando bringt achtzehn Container hoch. Dazu zählen die sieben Domain-Dienste, der MCP-Server und das Frontend sowie die Infrastruktur aus PostgreSQL, Redis, RabbitMQ, MinIO und Traefik. Hinzu kommen zwei Initialisierungs-Container, von denen einer die Datenbankmigrationen ausführt und der andere den Bucket im Objektspeicher anlegt, sowie MailHog für den Mailversand in der Entwicklung und Jaeger für die Anzeige der Traces. Anschließend wartet ein Hilfsskript, bis alle Health-Checks grün sind, und gibt die erreichbaren URLs aus. Der erste Lauf dauert etwa drei Minuten, da die Images zuvor gebaut werden müssen.
+
+Die Migrationen laufen gegen alle sieben logischen Datenbanken, bevor der erste Dienst startet. Ein Dienst trifft damit nie auf ein Schema, das noch nicht existiert. Tabelle~\vref{tab:make-kommandos} listet die wichtigsten Kommandos des Makefiles.
+
+\begin{table}[ht]
+  \centering
+  \caption{Wichtige Kommandos für den lokalen Betrieb}
+  \label{tab:make-kommandos}
+  \begin{tabularx}{\linewidth}{@{}lX@{}}
+    \toprule
+    \textbf{Kommando} & \textbf{Wirkung} \\
+    \midrule
+    \texttt{make up}            & Startet alle Dienste und die Infrastruktur \\
+    \texttt{make seed}          & Legt Demo-Daten an (\texttt{alice@teamboard.local}) \\
+    \texttt{make urls}          & Gibt alle erreichbaren URLs aus \\
+    \texttt{make logs-<svc>}    & Verfolgt die Logs eines einzelnen Dienstes \\
+    \texttt{make test}          & Führt Unit- und Integrationstests aus \\
+    \texttt{make generate}      & Erzeugt Code aus SQL-Abfragen und OpenAPI-Verträgen \\
+    \texttt{make down}          & Stoppt alle Container, Daten bleiben erhalten \\
+    \texttt{make clean-volumes} & Setzt alles zurück und löscht nach Rückfrage alle Daten \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Nach \texttt{make seed} steht ein vollständig befülltes Demo-Projekt bereit, sodass die Oberfläche ohne manuelles Anlegen von Testdaten erkundet werden kann. Das Frontend ist unter \url{http://localhost:3000} erreichbar und die API über das Gateway unter \url{http://localhost}. Zusätzlich stehen die Verwaltungsoberflächen von RabbitMQ, MinIO und Jaeger sowie die Swagger-Dokumentationen der Dienste bereit.
+
+\section{Wahl des Betriebsmodells}
+\label{sec:betriebsmodell}
+
+Ein Microservice-System legt nahe, jeden Dienst auch im Betrieb einzeln zu verwalten und einzeln zu skalieren. TeamBoard läuft dennoch vollständig auf einer einzigen EC2-Instanz. Diese Entscheidung verdient eine Begründung, weil sie der verteilten Architektur auf den ersten Blick zu widersprechen scheint. Betrachtet wurden die vier Modelle, die Tabelle~\vref{tab:betriebsmodelle} gegenüberstellt.
+
+\begin{table}[ht]
+  \centering
+  \caption{Betrachtete Betriebsmodelle und ihre Bewertung im Projektkontext}
+  \label{tab:betriebsmodelle}
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm}X@{}}
+    \toprule
+    \textbf{Modell} & \textbf{Bewertung} \\
+    \midrule
+    Serverlose Funktionen (Lambda, API Gateway) & Passt nicht zu offenen WebSocket-Verbindungen und dauerhaft laufenden Event-Consumern \\
+    Verwaltete Container (ECS, Fargate) & Fachlich gut passend, aber starke Anbieterbindung und laufende Grundkosten \\
+    Kubernetes (EKS) & Betriebsaufwand und Kosten stehen in keinem Verhältnis zur Projektgröße \\
+    Eine EC2-Instanz mit Docker Compose \emph{(gewählt)} & Identische Umgebung lokal und produktiv, minimale Kosten, dafür ein Single Point of Failure \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Gegen den serverlosen Ansatz sprachen vor allem zwei fachliche Eigenschaften des Systems. Der Notification-Service hält offene WebSocket-Verbindungen und ist damit bewusst zustandsbehaftet, was zu kurzlebigen Funktionsaufrufen schlecht passt. Außerdem betreibt jeder Dienst dauerhaft laufende Consumer am Event-Bus sowie einen Outbox-Worker, also genau die Art von Hintergrundprozess, für die Funktionen nicht gedacht sind. Eine serverlose Umsetzung hätte deshalb nicht nur die Betriebsform verändert, sondern den Entwurf der Dienste selbst verbogen.
+
+Verwaltete Container über ECS oder Fargate wären die naheliegendste Alternative gewesen und hätten zum Zuschnitt der Dienste gut gepasst. Ein früher Entwurf des Projekts ging genau diesen Weg und beschrieb die Infrastruktur über Infrastructure as Code mit dem CDK, mit DynamoDB und EventBridge als Rückgrat. Dieser Entwurf wurde beim Neuaufsatz des Systems in Go verworfen. Ausschlaggebend war, dass die verwalteten Dienste die Architektur eng an einen Anbieter gebunden hätten. Ein Event-Bus als EventBridge und eine Datenhaltung in DynamoDB lassen sich lokal nicht ohne Weiteres nachbilden, sodass die Entwicklungsumgebung von der Produktionsumgebung abgewichen wäre. Der eigentliche Lerngegenstand des Projekts ist jedoch die Architektur der Dienste und nicht die Integration in einen bestimmten Cloud-Anbieter.
+
+Hinzu kam eine wirtschaftliche Randbedingung. Für das Projekt stand nur ein begrenztes AWS-Kontingent zur Verfügung. Verwaltete Dienste rechnen überwiegend nach Bereitstellungszeit und nicht nach tatsächlicher Nutzung, sodass ein Aufbau aus mehreren Datenbanken, einem verwalteten Broker und einem Load Balancer auch im Leerlauf durchgehend Kosten verursacht hätte. Eine einzelne Instanz, die den kompletten Stack trägt, ist unter dieser Randbedingung die sparsamste Variante, ohne dass Funktionalität entfällt.
+
+Der gewählte Aufbau bringt zudem einen praktischen Vorteil mit sich. Lokal und in der Cloud läuft dieselbe Compose-Basis, die im Produktionsfall lediglich um ein Overlay ergänzt wird. Ein Fehler, der nur in der Produktion auftritt, lässt sich dadurch selten auf eine abweichende Umgebung schieben. Der Preis dieser Entscheidung ist allerdings deutlich und soll nicht verschwiegen werden. Die eine Maschine ist ein Single Point of Failure, alle Dienste konkurrieren um dieselben Ressourcen, und von der geforderten unabhängigen Skalierbarkeit ist im laufenden Betrieb nichts zu sehen. Sie ist im Entwurf angelegt, aber nicht ausgespielt.
+
+Genau an dieser Stelle zahlt sich der Zuschnitt der Dienste jedoch aus. Alle Dienste außer dem Notification-Service sind zustandslos, hängen hinter Traefik und werden ausschließlich über Umgebungsvariablen konfiguriert. Ein Ausbau ersetzt deshalb jeweils nur eine einzelne Kante des Aufbaus und lässt den Anwendungscode unberührt. Wären die Kosten kein Thema, führte der Weg in drei Schritten weiter. Zuerst würden die zustandsbehafteten Container in verwaltete Dienste ausgelagert, also PostgreSQL nach RDS, Redis nach ElastiCache, RabbitMQ nach Amazon MQ und MinIO nach S3. Anschließend zögen die Dienste selbst auf ECS oder Fargate um, wobei die bereits vorhandenen Produktions-Images unverändert weiterlaufen. Zuletzt verteilte ein Load Balancer mehrere Instanzen je Dienst, was allerdings erst dann echten Nutzen bringt, wenn einzelne Dienste tatsächlich unterschiedlich stark belastet sind. Keiner dieser Schritte ist eine Neuentwicklung.
+
+\section{Continuous Delivery auf AWS}
+\label{sec:cicd}
+
+Für den Betrieb außerhalb des Entwicklungsrechners gilt dasselbe Ziel wie lokal, nämlich ein einziger Auslöser ohne manuelle Schritte. Der Auslöser ist hier ein \texttt{git push}. Abbildung~\vref{fig:cicd-pipeline} zeigt den Weg vom Commit bis zum laufenden Stand auf der Produktionsmaschine.
+
+\begin{figure}[ht]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+      font=\small,
+      box/.style={draw, rounded corners, fill=codeblue!10, align=center, minimum height=13mm, text width=36mm, inner sep=3pt},
+      infra/.style={draw, rounded corners, fill=codeorange!15, align=center, minimum height=13mm, text width=36mm, inner sep=3pt},
+      flow/.style={-{Latex[length=2.2mm]}, thick},
+    ]
+    \node[box] (push) {\textbf{git push}\\beliebiger Branch};
+    \node[box, right=8mm of push] (build) {\textbf{Job 1: build}\\Matrix über 9 Images\\$\rightarrow$ GHCR};
+    \node[box, right=8mm of build] (deploy) {\textbf{Job 2: deploy}\\SSH auf die EC2-Box\\\texttt{needs: build}};
+    \node[infra, right=8mm of deploy] (box) {\textbf{EC2-Instanz}\\\texttt{deploy.sh}\\\texttt{compose pull \& up}};
+    \draw[flow] (push) -- (build);
+    \draw[flow] (build) -- (deploy);
+    \draw[flow] (deploy) -- (box);
+  \end{tikzpicture}%
+  }
+  \caption{Continuous-Delivery-Pipeline. Der Git-SHA verklammert Images und Konfiguration zu einer gemeinsamen Revision.}
+  \label{fig:cicd-pipeline}
+\end{figure}
+
+Der erste Job baut in einer Matrix neun Container-Images, also die sieben Domain-Dienste sowie Frontend und MCP-Server, und lädt sie in die GitHub Container Registry. Jedes Image trägt den Git-SHA als Tag. Der zweite Job verbindet sich per SSH mit der EC2-Instanz und ruft dort ein Deploy-Skript auf, das denselben SHA auscheckt und den Compose-Stack aktualisiert.
+
+Diese Verklammerung über den SHA ist die zentrale Eigenschaft des Aufbaus. Es gibt zwei getrennte Artefaktströme, nämlich die Images über die Registry und die Konfigurationsdateien über einen Git-Checkout auf der Maschine. Weil beide denselben Commit referenzieren, kann der laufende Code nie zu einer anderen Compose-, Migrations- oder Traefik-Konfiguration passen als vorgesehen.
+
+Die Maschine provisioniert sich dabei selbst. Eine frische EC2-Instanz benötigt lediglich eine Security Group und einen hinterlegten SSH-Schlüssel. Der Deploy-Schritt installiert Git, Docker und das Compose-Plugin idempotent, klont das Repository und erzeugt beim ersten Lauf eine Konfigurationsdatei mit zufällig generierten Secrets für Datenbank, Broker, Objektspeicher und die Signierschlüssel. Diese Datei ist von der Versionsverwaltung ausgeschlossen und überlebt dadurch jeden weiteren Deploy. Kein Secret liegt dauerhaft im Repository auf der Maschine, und die Zugangsdaten zur Registry sind kurzlebige Token, die mit dem Workflow-Lauf verfallen.
+
+Der öffentliche Zugang ist über TLS abgesichert. Für die Instanz stand keine eigene Domain zur Verfügung, ein Zertifikat einer öffentlichen Zertifizierungsstelle verlangt aber einen auflösbaren Namen. Deshalb wird ein Wildcard-DNS-Dienst genutzt, der die IP-Adresse im Hostnamen kodiert, und Traefik bezieht darüber ein Let's-Encrypt-Zertifikat per TLS-ALPN-Challenge. Der Zertifikatsbezug hängt an einem eigens dafür angelegten Router, denn Traefik leitet die anzufordernden Domains aus den Router-Regeln ab und nicht aus der Konfiguration des Entrypoints. Lokal bleibt dieser Mechanismus inaktiv, sodass die Entwicklungsumgebung nie mit einer Zertifizierungsstelle spricht.
 
 \section{Vorstellung des laufenden Systems}
 \label{sec:laufendes-system}
 
+Das laufende System präsentiert sich über drei Zugänge, die alle denselben Kern ansprechen. Das sind die Weboberfläche, die MCP-Anbindung für Sprachmodell-Clients und die Notebooks zur Demonstration der Laufzeit-Erweiterbarkeit.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\linewidth]{resources/pictures/projektuebersicht.png}
+  \caption{Projektübersicht der Weboberfläche nach der Anmeldung. Die Fußzeile der Seitenleiste weist den ausgerollten Commit aus.}
+  \label{fig:screenshot-projekte}
+\end{figure}
+
+Die Weboberfläche führt nach der Anmeldung auf die Projektübersicht aus Abbildung~\vref{fig:screenshot-projekte}, von der aus Boards geöffnet werden. Ein Board wird je nach Typ als Spaltenansicht, als Kalender oder als Timeline dargestellt. Aufgaben lassen sich per Drag-and-Drop zwischen Spalten verschieben, wobei der fachliche Status aus der Zielspalte übernommen wird. Ein Detailbereich zeigt Beschreibung, Priorität, Zuweisung, Termine, Kommentare und Anhänge. Am unteren Rand der Seitenleiste stehen der Commit und der Zeitpunkt des ausgerollten Standes, sodass nach einem Deploy unmittelbar erkennbar ist, ob die neue Revision tatsächlich auf der Maschine angekommen ist.
+
+Das für die Bewertung des Systems aussagekräftigste Verhalten zeigt sich mit zwei geöffneten Browser-Fenstern am selben Board. Verschiebt ein Benutzer eine Aufgabe, erscheint die Änderung im zweiten Fenster ohne Neuladen. Der Weg dorthin führt über die gesamte Kette aus Abschnitt~\vref{sec:zusammenspiel}. Der Task-Service schreibt das Ereignis über die Outbox, der Notification-Service konsumiert es vom Event-Bus und stellt es über die offene WebSocket-Verbindung zu, woraufhin das Frontend gezielt den betroffenen Teil seines Caches invalidiert. Die Benachrichtigungsglocke aktualisiert ihren Zähler auf demselben Weg. Dieses Verhalten ist damit kein Sonderweg für die Oberfläche, sondern die sichtbare Wirkung des ereignisgetriebenen Kerns.
+
+Der zweite Zugang ist der MCP-Server aus Abschnitt~\vref{sub:mcp}. Ein Sprachmodell-Client wie Claude Desktop wird durch Eintragen der Verbindungs-URL angebunden und meldet sich anschließend im Browser mit dem regulären TeamBoard-Konto an. Danach lassen sich Projekte, Boards und Aufgaben im Dialog mit dem Modell verwalten, und die Änderungen erscheinen unmittelbar in der Weboberfläche, da beide Zugänge denselben Weg über das Gateway nehmen.
+
+Der dritte Zugang sind die Notebooks unter \path{docs/demo}. Sie registrieren zur Laufzeit einen neuen Board-Typ in der Board Registry und legen anschließend ein Board dieses Typs an, ohne dass ein Dienst neu gebaut oder neu gestartet wird. Damit ist die in Kapitel~\vref{chap:entwurf} beschriebene Erweiterbarkeit im laufenden System nachvollziehbar und wird nicht nur im Entwurf behauptet. Ein weiteres Notebook demonstriert die Webhook-Zustellung an ein externes Ziel.
+
 \section{Realisierter Funktionsumfang}
 \label{sec:funktionsumfang}
+
+Tabelle~\vref{tab:funktionsumfang} fasst zusammen, was tatsächlich umgesetzt ist. Maßstab ist dabei die in Kapitel~\vref{chap:einleitung} beschriebene Priorität. Die fachliche Breite bleibt bewusst schlank, während die architektonischen Muster durchgängig ausgeführt sind.
+
+\begin{table}[ht]
+  \centering
+  \caption{Realisierter Funktionsumfang nach Bereichen}
+  \label{tab:funktionsumfang}
+  \begin{tabularx}{\linewidth}{@{}lX@{}}
+    \toprule
+    \textbf{Bereich} & \textbf{Umgesetzt} \\
+    \midrule
+    Identität      & Registrierung, Login, Token-Refresh, Passwort-Reset, JWKS-Endpunkt, langlebige Personal Access Tokens, OAuth 2.1 für MCP-Clients \\
+    Projekte       & Projekte und Boards mit Rollen und Mitgliedschaften, zentrale Berechtigungsauskunft für alle übrigen Dienste \\
+    Aufgaben       & Anlegen, Bearbeiten, Verschieben, Zuweisen, Statusübergänge, Kommentare, Anhang-Referenzen, Audit-Trail \\
+    Dokumente      & Metadatenverwaltung mit Versionierung, Up- und Download über vorsignierte URLs direkt gegen den Objektspeicher \\
+    Echtzeit       & WebSocket-Push mit Redis-Backplane, persistente Benachrichtigungen, Live-Aktualisierung von Board und Glocke \\
+    Integrationen  & Webhooks mit HMAC-Signatur, exponentiellem Backoff, Circuit Breaker, Dead-Letter-Queue und SSRF-Schutz \\
+    Board-Typen    & Registrierung neuer Typen zur Laufzeit inklusive Spalten, Konfigurationsschema und deklarativer Darstellung \\
+    Sprachmodelle  & MCP-Server mit vollem CRUD-Umfang auf Projekten, Boards, Aufgaben und Board-Typen \\
+    Betrieb        & Ein-Kommando-Start lokal, automatisiertes Ausrollen per Push, TLS, strukturierte Logs und verteiltes Tracing \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Ebenso wichtig ist, was bewusst nicht umgesetzt wurde. Das Repository führt diese Punkte unter \path{docs/TODO.md}, damit Dokumentation und Realität auseinandergehalten werden. Zwei Lücken betreffen die Autorisierung. Die Schreibrouten der Board Registry stehen derzeit jedem authentifizierten Benutzer offen und müssten auf eine Administrationsrolle eingeschränkt werden. Ebenso ist das Abonnieren eines Board-Kanals über WebSocket nur an eine gültige Anmeldung gebunden, da der Notification-Service keine Zuordnung von Boards zu Projekten kennt und die Mitgliedschaft deshalb nicht synchron prüfen kann. Beide Punkte sind bekannt und dokumentiert, im vorliegenden Stand aber nicht geschlossen. Auf Funktionsebene fehlen der Wechsel der Board-Darstellung zur Laufzeit sowie eingehende Webhooks. Bei den Tests erreicht die geteilte Bibliothek die geforderte Abdeckung mit Ausnahme des Exportpfads für Tracing-Daten, der einen eigenen Test-Collector erfordern würde.
+
+Dass diese Lücken hier benannt und nicht verschwiegen werden, hat einen Grund, der in Abschnitt~\vref{sec:ki-programmerstellung} bereits angeklungen ist. Die Dokumentation lief dem Code während des Projekts mehrfach voraus und beschrieb Geplantes als fertig. Die gepflegte Liste offener Punkte ist die Konsequenz daraus und der Versuch, diesen Abstand sichtbar zu halten.
