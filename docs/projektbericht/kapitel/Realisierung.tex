@@ -4,11 +4,93 @@
 \section{Gewählter Software-Stack}
 \label{sec:software-stack}
 
+Die Wahl der Technologien folgt den im Entwurf begründeten Architekturzielen. Dieser Abschnitt benennt den konkreten Stack und die Gründe für die einzelnen Bausteine. Die Architekturmuster selbst sind in \vref{chap:entwurf} diskutiert und werden hier nicht wiederholt.
+
+\begin{table}[ht]
+  \centering
+  \caption{Gewählter Software-Stack mit Begründung}
+  \label{tab:software-stack}
+  \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}p{3.4cm}X@{}}
+    \toprule
+    \textbf{Baustein} & \textbf{Wahl} & \textbf{Begründung} \\
+    \midrule
+    Sprache (Backend)   & Go 1.22            & Statisch gelinkte Binaries, kleine Container-Images, nebenläufige Consumer über Goroutinen, umfangreiche Standardbibliothek \\
+    HTTP-Router         & Chi                & Leichtgewichtig, baut direkt auf \texttt{net/http} auf, Middleware-Ketten ohne Framework-Bindung \\
+    Datenbankzugriff    & sqlc               & Erzeugt typsicheren Go-Code aus reinem SQL, prüft die Abfragen zur Build-Zeit, kein Laufzeit-ORM \\
+    API-Verträge        & oapi-codegen       & OpenAPI-first, generierte Server-Stubs, Vertrag und Implementierung bleiben synchron \\
+    Datenbank           & PostgreSQL 16      & ACID je Dienst, JSONB und Array-Typen für Konfiguration und Event-Filter, eine Instanz mit logischer DB je Dienst \\
+    Cache und Backplane & Redis 7            & Kurzlebiger Berechtigungs-Cache und Backplane für die WebSocket-Verteilung über mehrere Instanzen \\
+    Event-Bus           & RabbitMQ 3.12      & Topic-Exchange mit Routing-Keys, eingebaute Dead-Letter-Queues, betriebsarm im Projektumfang \\
+    Objektspeicher      & MinIO (S3-kompatibel) & Vorsignierte URLs, Blob-Transfer direkt zwischen Client und Speicher \\
+    Gateway             & Traefik            & Docker-native Service-Discovery über Labels, TLS-Terminierung, Middleware für Rate-Limiting und CORS \\
+    Frontend            & React 18, TypeScript, Vite & Typsichere Single-Page-Anwendung mit schnellem Build \\
+    Frontend-Bibliotheken & react-query, zustand, dnd-kit, zod, Tailwind & Server-Cache, lokaler UI-Zustand, Drag-and-Drop, Schema-Validierung, Utility-CSS \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Mehrere Entscheidungen verdienen eine kurze Begründung über die Tabelle hinaus.
+
+Go wurde gewählt, weil die verteilte Architektur viele kleine, unabhängig betriebene Dienste verlangt. Statisch gelinkte Binaries lassen sich in schlanke Container packen, starten schnell und benötigen zur Laufzeit keine weiteren Abhängigkeiten. Die Nebenläufigkeit über Goroutinen passt zum ereignisgetriebenen Kern, in dem jeder Dienst seine Consumer und den Outbox-Worker parallel betreibt.
+
+Statt eines ORM kommt sqlc zum Einsatz. Die Abfragen werden als reines SQL geschrieben und in typsicheren Go-Code übersetzt. Fehler in einer Abfrage fallen dadurch beim Generieren auf und nicht erst zur Laufzeit. Zusammen mit oapi-codegen für die HTTP-Verträge entsteht ein durchgehend generierter Rand um die handgeschriebene Fachlogik. Wiederkehrende Aufgaben wie Auth-Middleware, Event-Bus-Anbindung und der Outbox-Worker liegen in einem geteilten Go-Modul, das alle Dienste einbinden.
+
+Als Event-Bus wurde RabbitMQ und nicht Kafka gewählt. Der Topic-Exchange bildet die benötigte Zustellung nach Routing-Keys direkt ab, Dead-Letter-Queues sind eingebaut, und der Betrieb ist für den Projektumfang deutlich einfacher. Die höhere Durchsatz- und Log-Semantik von Kafka wurde nicht gebraucht und hätte den Betriebsaufwand ohne Gegenwert erhöht.
+
+Traefik als Gateway erkennt die Dienste über Docker-Labels und kommt damit ohne separate Registrierung aus. Dieselbe Konfiguration trägt lokal und im Betrieb. Die Details des Betriebs und der CI/CD-Kette sind in \vref{chap:deployment} beschrieben.
+
 \section{Vorgehen bei der Programmerstellung}
 \label{sec:vorgehen}
+
+Die Umsetzung begann mit einer vorläufigen Planung der Gesamtarchitektur. Diese Planung war nicht von Beginn an vollständig. Das Frontend und der MCP-Server kamen erst später hinzu, und die Board Registry wurde erst in einem späteren Schritt in ihrer endgültigen Form entworfen. Für jede Komponente wurden ihre Aufgabe und ihr Zusammenspiel mit den übrigen Diensten bereits vor der Implementierung relativ genau festgelegt und in der Architektur- und Servicedokumentation des Repositorys niedergeschrieben.
+
+Auf dieser Grundlage entstand in einem ersten großen Schritt die Grundstruktur des Systems zusammen mit den Basisfunktionalitäten. Diese wurde als zusammenhängender Wurf mit Unterstützung von Claude Code angelegt, statt jeden Dienst einzeln von Grund auf aufzubauen. Damit stand früh ein lauffähiges Gerüst über alle Dienste bereit.
+
+Die darüber hinausgehenden Funktionalitäten wurden einzeln oder gemeinsam im Team entworfen und iterativ ergänzt. Jede Erweiterung durchlief denselben Rhythmus, den \vref{fig:iteration} zeigt. Am Anfang steht das Schneiden eines Inkrements mit Ziel und Umfang. Darauf folgt die Spezifikation, bei der Dokumentation, OpenAPI-Verträge und SQL-Abfragen vor dem Code entstehen. Anschließend werden der generierte Code und die Fachlogik samt Tests umgesetzt. Zuletzt wird die Dokumentation an den tatsächlichen Stand angeglichen, bevor das nächste Inkrement beginnt.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}[
+      font=\small,
+      phase/.style={draw, rounded corners, fill=codeblue!10, align=center, minimum height=11mm, text width=34mm, inner sep=3pt},
+      flow/.style={-{Latex[length=2.2mm]}, thick},
+    ]
+    \node[phase] (p1) {\textbf{Planung}\\Inkrement schneiden, Ziel und Umfang};
+    \node[phase, right=6mm of p1] (p2) {\textbf{Spezifikation}\\Doku, OpenAPI und SQL zuerst};
+    \node[phase, right=6mm of p2] (p3) {\textbf{Implementierung}\\Generieren, Fachlogik, Tests};
+    \node[phase, right=6mm of p3] (p4) {\textbf{Doku nachführen}\\Realität zurück in die Spezifikation};
+    \draw[flow] (p1) -- (p2);
+    \draw[flow] (p2) -- (p3);
+    \draw[flow] (p3) -- (p4);
+    \draw[flow] (p4.south) -- ++(0,-12mm) -| (p1.south);
+    \node[above, font=\scriptsize] at ($(p1.south)!0.5!(p4.south)+(0,-12mm)$) {nächstes Inkrement};
+  \end{tikzpicture}
+  \caption{Iterativer Rhythmus bei der Umsetzung eines Inkrements. Nach dem gemeinsamen Grundgerüst durchlief jede weitere Funktion diese Schleife.}
+  \label{fig:iteration}
+\end{figure}
 
 \section{Einsatz von KI bei der Programmerstellung}
 \label{sec:ki-programmerstellung}
 
+Der Einsatz von KI beschränkte sich nicht auf die reine Codeerzeugung. Die eingesetzten Agenten trugen den gesamten Entwicklungsprozess mit. Sie dienten als primäres Werkzeug für die Recherche und als Sparringpartner bei der Planung. Auch die Implementierung und die Formulierung der Dokumentation stammten zum Großteil von den Agenten. Der folgende Abschnitt bewertet dieses Vorgehen und benennt die dabei aufgefallenen Vor- und Nachteile.
+
+Drei Punkte haben sich als Stärke erwiesen. Der erste ist die Konsistenz über die sieben Dienste. Struktur, Muster und Fehlerbehandlung ließen sich über die in den Anforderungen und den Coding-Guidelines festgehaltenen Vorgaben durchsetzen und blieben so über alle Dienste hinweg gleich. Der zweite Punkt ist die Rolle der Spezifikation. Umfangreiche Architektur- und Servicedokumente entstanden vor dem Code und dienten als belastbare Grundlage für die Umsetzung. Der dritte Punkt ist die Geschwindigkeit. Einzelne Funktionen ließen sich in wenigen Anfragen umsetzen.
+
+Ein Grund für diese Stärken liegt vermutlich im Zuschnitt der Dokumentation. Die umfangreiche Architektur- und Servicedokumentation sowie die vorab festgelegten Code- und Stilrichtlinien wurden in erster Linie als Leitplanken für die Agenten angelegt. Sie geben einen Rahmen vor, innerhalb dessen ein Agent arbeitet, und schränken den Spielraum für eigenmächtige Entscheidungen ein. Ohne eine systematische Messung lässt sich der Effekt nicht belegen. Unserem Eindruck nach trug dieser Rahmen aber zu einer zügigen und zielgerichteten Entwicklung bei, bei der ein Abdriften des Agenten in eine falsche Richtung und das daraus folgende Zurückrudern seltener auftraten.
+
+Dem stehen mehrere Schwierigkeiten gegenüber. Die regelmäßige Pflege der Dokumentation war mit sehr großem Kontext und entsprechend hohem Token-Aufwand verbunden. Bei komplexen Aufgaben führten ungenaue Vorgaben zu fehlerhaften Annahmen und undokumentierten Nebeneffekten. Ein Beispiel war eine Überarbeitung des Frontends, bei der wesentliche Funktionen nicht übernommen wurden. Hinzu kamen Halluzinationen in der Dokumentation, in der Geplantes und bereits Umgesetztes vermischt wurden. So war die Autorisierung über längere Zeit nur als Stub vorhanden, in der Dokumentation aber bereits als fertig beschrieben.
+
+Ein weiterer Nachteil betrifft weniger den einzelnen Arbeitsschritt als das Gesamtergebnis. Durch die starke Beteiligung der Agenten an der Implementierung fällt der eigene Überblick über die Codebasis geringer aus als bei vollständig manueller Entwicklung. Eine Weiterentwicklung ohne agentische Unterstützung wäre nur mit erheblichem Einarbeitungsaufwand möglich.
+
+Der Lerneffekt fällt dadurch anders aus als bei klassischer Programmierung. Da Planung und Architekturentwurf in der Hand des Teams blieben, entstand ein Lerneffekt vor allem auf konzeptioneller und architektonischer Ebene. Auf der rein technischen Ebene der Implementierung fiel er geringer aus.
+
 \section{Herausforderungen bei der Realisierung}
 \label{sec:herausforderungen}
+
+Für das Team war ein verteiltes Microservice-System in diesem Umfang die erste Umsetzung dieser Art. Die zentrale Schwierigkeit lag darin, den Schnitt der Dienste und die Verträge zwischen ihnen weitgehend im Voraus richtig zu treffen. Ein falscher Schnitt ist in einem verteilten System aufwändiger zu korrigieren als in einem Monolithen, da er Datenhoheit, Ereignisse und Schnittstellen mehrerer Dienste zugleich betrifft. Die Board Registry ist ein Beispiel dafür, denn sie wurde erst in einem späteren Schritt in ihre endgültige Form gebracht, wie in \vref{sec:vorgehen} beschrieben. Der hohe Planungsaufwand vor der Implementierung war damit selbst eine Herausforderung.
+
+Eine weitere Herausforderung war das Debugging im verteilten System. Fehler verteilen sich über Dienstgrenzen und asynchrone Ereignisketten. Ein falsches Ergebnis kann seine Ursache mehrere Dienste stromaufwärts haben, ausgelöst über ein Ereignis, das erst an anderer Stelle sichtbar wird. Die Lokalisierung ist dadurch schwieriger als ein einzelner Stacktrace in einem Monolithen. Dem begegnet der Stack mit strukturierten Logs, durchgereichten Trace-IDs und verteiltem Tracing. Hinzu kam, dass agentisch erzeugter Code vor einer Korrektur zunächst verstanden werden musste, ein Punkt, der in \vref{sec:ki-programmerstellung} bereits angesprochen ist.
+
+Damit verbunden war die Schwierigkeit, den Überblick über das Gesamtsystem zu behalten. Sieben Dienste, die geteilten Bibliotheken und das Frontend bilden eine breite Codebasis. Das Tempo der KI-gestützten Codeerzeugung ließ diese Codebasis schneller wachsen als die persönliche Vertrautheit mit ihren Details. Die dokumentationsgetriebene Arbeitsweise aus \vref{sec:vorgehen} wirkte dem nach unserem Eindruck entgegen, ohne die Lücke vollständig zu schließen.
+
+Schließlich stellten sich Herausforderungen im Projektmanagement. Die parallel laufenden Inkremente mussten koordiniert und die Dokumentation immer wieder an den tatsächlichen Stand angeglichen werden. Unter dem bewussten Fokus auf ein tragfähiges Minimum war zudem laufend zwischen notwendigem und wünschenswertem Umfang abzuwägen, damit der Kern innerhalb des verfügbaren Zeitrahmens bis zur Abgabe belastbar fertig wurde.

@@ -10,25 +10,25 @@ TeamBoard ist als komponentenbasiertes Microservice-System umgesetzt. Das System
 
 Die Architektur folgt zwölf verbindlichen Prinzipien, die in der Architektur-Referenz des Repositorys festgehalten sind. Eine Abweichung von einem Prinzip erfordert einen dokumentierten Architecture Decision Record (ADR). Die folgenden Abschnitte diskutieren die wichtigsten dieser Entscheidungen.
 
-\subsection{Microservices statt Monolith}
+\subsection{Microservices}
 
 Die Aufgabenstellung fordert ausdrücklich ein komponentenbasiertes System mit unabhängig skalierbaren Diensten. Ein modularer Monolith wäre in der Entwicklung und im Betrieb einfacher gewesen und hätte verteilte Transaktionen vermieden. Er hätte jedoch die geforderte unabhängige Skalierung und die klare fachliche Trennung nur eingeschränkt abgebildet. Die Entscheidung fiel daher auf einen Schnitt in eigenständige Dienste. Der Preis dafür ist ein höherer Betriebsaufwand und die Notwendigkeit, Konsistenz über Dienstgrenzen hinweg aktiv zu behandeln.
 
 Der Zuschnitt orientiert sich an Domain-Driven Design. Jeder Dienst bildet einen fachlichen Bounded Context mit eigener Sprache ab. Der Umfang wurde bewusst als tragfähiges Minimum gewählt und lässt sich schrittweise erweitern, statt von Beginn an alle denkbaren Funktionen aufzunehmen.
 
-\subsection{Asynchrone Ereignisse statt durchgehend synchroner Aufrufe}
+\subsection{Asynchrone Ereignisse}
 
 Die Dienste tauschen fachliche Ereignisse über einen RabbitMQ-Topic-Exchange aus. Synchrone Aufrufe werden nur dort eingesetzt, wo der Benutzer eine sofortige Antwort benötigt oder ein Dienst eine Information verbindlich zum Zeitpunkt der Aktion braucht. Die betrachtete Alternative war eine durchgehend synchrone Kommunikation über REST. Sie hätte einfachere Nachvollziehbarkeit geboten, aber die Dienste eng gekoppelt und die Verfügbarkeit voneinander abhängig gemacht. Der ereignisgetriebene Ansatz entkoppelt die Dienste, sodass ein neuer Empfänger ohne Änderung am Sender hinzukommt. Als Preis ergibt sich Eventual Consistency nach außen, die durch idempotente Verarbeitung und eine Dead-Letter-Queue abgesichert wird.
 
-\subsection{Database-per-Service statt geteilter Datenbank}
+\subsection{Database-per-Service}
 
 Jeder Dienst besitzt seine eigene Datenbank und ist die alleinige Datenhoheit für seinen Bereich. Ein direkter Datenbankzugriff zwischen Diensten ist ausgeschlossen. Eine geteilte Datenbank hätte Joins über Fachgrenzen und starke Konsistenz erlaubt, aber die Dienste über das Schema fest gekoppelt und unabhängige Weiterentwicklung erschwert. Die getrennten Datenbanken sichern die Autonomie der Dienste. Der Preis ist, dass fachübergreifende Sichten über Ereignisse oder Schnittstellen zusammengeführt werden müssen und nicht per SQL-Join entstehen.
 
-\subsection{Outbox-Pattern statt direktem Publizieren}
+\subsection{Outbox-Pattern}
 
 Ein Dienst, der eine Datenänderung vornimmt und dazu ein Ereignis veröffentlicht, steht vor dem Problem, dass beide Schritte auseinanderlaufen können. Ein direktes Publizieren nach dem Commit kann ein Ereignis verlieren, wenn der Broker im falschen Moment nicht erreichbar ist. Deshalb schreibt jeder Dienst das Ereignis in derselben Datenbanktransaktion wie die Datenänderung in eine Outbox-Tabelle. Ein gemeinsamer Worker liest diese Tabelle und publiziert die Ereignisse. Die Alternative eines verteilten Zwei-Phasen-Commits wurde wegen ihrer Komplexität und schlechten Skalierbarkeit verworfen. Der Preis der Outbox ist eine geringe zusätzliche Latenz durch das Polling und der Betrieb des Workers.
 
-\subsection{Zero-Trust statt Authentifizierung am Gateway}
+\subsection{Zero-Trust}
 
 Das Gateway übernimmt Routing, Rate-Limiting und CORS, prüft aber bewusst keine Benutzer-Token. Stattdessen validiert jeder Dienst das JWT selbst gegen den öffentlichen Schlüssel des Auth-Service. Eine zentrale Prüfung am Gateway wäre einfacher zu konfigurieren gewesen, hätte aber eine implizite Vertrauensstellung allein aufgrund der Netzwerklage geschaffen. Der gewählte Zero-Trust-Ansatz macht jeden Dienst unabhängig prüfbar. Interne Aufrufe zwischen Diensten tragen zusätzlich ein kurzlebiges Service-Token. Der Preis ist ein wiederkehrender Validierungsaufwand in jedem Dienst, der durch eine geteilte Bibliothek und einen Schlüssel-Cache gering gehalten wird.
 
@@ -36,7 +36,6 @@ Das Gateway übernimmt Routing, Rate-Limiting und CORS, prüft aber bewusst kein
 
 Der Project-Service ist die autoritative Quelle für projektbezogene Berechtigungen. Andere Dienste fragen vor schreibenden Operationen synchron dort an, ob ein Benutzer die Operation ausführen darf. Die Alternative, Berechtigungen in jedem Dienst zu spiegeln, hätte den Synchron-Aufruf vermieden, aber die Gefahr widersprüchlicher Rechtestände erzeugt. Die zentrale Autorität hält die Regeln an einer Stelle konsistent. Der dabei entstehende Synchron-Aufruf wird über einen Redis-Cache mit kurzer Lebensdauer entschärft, der bei Mitgliederänderungen gezielt invalidiert wird.
 
-\ausarbeiten{Vertiefte Abwägung zu einer weiteren Entscheidung, zum Beispiel Wahl von PostgreSQL gegenüber getrennten Datenspeichern je Dienst oder Wahl von Traefik als Gateway. Bei Bedarf mit kurzer Begruendung ergaenzen.}
 
 \section{Architekturübersicht}
 \label{sec:architekturbild}
@@ -91,7 +90,7 @@ Der Plugin-Service ist der Erweiterungspunkt für ausgehende Integrationen. Er k
 
 Als erster und im aktuellen Umfang einziger Integrationstyp ist der Webhook umgesetzt. Die Zustellung ist als Pipeline mit mehreren Schutzmechanismen ausgelegt. Ausgehende Aufrufe werden mit einer HMAC-Signatur versehen, sodass der Empfänger die Echtheit prüfen kann. Fehlgeschlagene Zustellungen werden mit exponentiellem Backoff wiederholt, und dauerhaft nicht erreichbare Ziele werden über einen Circuit Breaker je Webhook abgeschaltet. Nicht zustellbare Nachrichten landen in einer Dead-Letter-Queue. Ein Audit-Log hält jeden Zustellversuch fest. Weitere Kanäle wie E-Mail oder Chat-Dienste ließen sich als zusätzliche Plugins im selben Dienst ergänzen, ohne die Domain-Services zu berühren.
 
-\ausarbeiten{SSRF-Schutz der ausgehenden Aufrufe knapp darstellen, siehe plugin.md Abschnitt 10.}
+Da die Ziel-URL eines Webhooks vom Benutzer stammt, ist der ausgehende Aufruf eine Angriffsfläche für Server-Side Request Forgery. Ohne Schutz ließe sich ein interner Dienst als Ziel eintragen und über den Plugin-Service ansprechen. Der Dienst begegnet dem auf mehreren Ebenen. Bei der Registrierung werden nur die Schemata \texttt{http} und \texttt{https} zugelassen, der Hostname wird aufgelöst, und jede private, Loopback-, Link-Local- oder Cloud-Metadata-Adresse wird abgewiesen. Zusätzlich gilt eine Whitelist erlaubter Ports. Da sich die aufgelöste Adresse zwischen Registrierung und Zustellung ändern kann, prüft ein eigener Dialer die Zieladresse unmittelbar vor jedem Verbindungsaufbau erneut und verhindert so DNS-Rebinding. Dieselbe Prüfung greift bei jedem Redirect, und die Größe der Antwort ist begrenzt.
 
 \subsection{Board Registry}
 \label{sub:boardregistry}
@@ -110,9 +109,11 @@ Der MCP-Server bindet Sprachmodell-Clients wie Claude an das System an. Er ist k
 \subsection{API-Gateway und Frontend}
 \label{sub:gateway-frontend}
 
-Das API-Gateway auf Basis von Traefik ist der einzige Eintrittspunkt. Es übernimmt Routing, Rate-Limiting, CORS und Sicherheits-Header und terminiert im Betrieb TLS. Geschäftslogik und Token-Prüfung liegen bewusst nicht im Gateway. Das Frontend ist eine React-basierte Single-Page-Anwendung. Es enthält die bereits beschriebene View-Registry, die die Darstellung eines Boards anhand der Presentation-Spezifikation seines Typs wählt.
+Das API-Gateway auf Basis von Traefik ist der einzige Eintrittspunkt. Es übernimmt Routing, Rate-Limiting, CORS und Sicherheits-Header und terminiert im Betrieb TLS. Geschäftslogik und Token-Prüfung liegen bewusst nicht im Gateway.
 
-\ausarbeiten{Falls gewuenscht, kurze Notiz zum konkreten Frontend-Aufbau und den wichtigsten Views ergaenzen.}
+Das Frontend ist eine mit React und TypeScript umgesetzte Single-Page-Anwendung. Der Serverzustand wird über eine Query-Bibliothek zwischengespeichert, sodass die Oberfläche ohne manuelles Nachladen konsistent bleibt. Die View-Registry hält drei eingebaute Renderer bereit, eine Spaltendarstellung für Kanban, eine Kalender- und eine Timeline-Ansicht. Der Renderer wird anhand des Feldes \texttt{presentation.view} des Board-Typs gewählt, unbekannte Werte fallen auf die Spaltendarstellung zurück.
+
+Ein Schwerpunkt des Frontends liegt auf der unmittelbaren Reaktion in gemeinsam genutzten Projekten. Bearbeiten mehrere Personen dasselbe Board, wird eine Änderung ohne Neuladen bei allen Beteiligten sichtbar. Diese Eigenschaft wird durch den ereignisgetriebenen Kern aus \vref{sec:zusammenspiel} getragen und reicht über den Notification-Service bis in die Oberfläche. Das Frontend hält je geöffnetem Board eine WebSocket-Verbindung, abonniert dessen Kanal und invalidiert bei einem eingehenden Aufgaben-Ereignis gezielt den lokalen Cache, worauf die betroffene Ansicht neu geladen wird.
 
 \section{Zusammenspiel der Komponenten}
 \label{sec:zusammenspiel}
