@@ -1,20 +1,20 @@
 \chapter{Entwurf}
 \label{chap:entwurf}
 
-Dieses Kapitel stellt die Architektur von TeamBoard vor. Der Schwerpunkt liegt auf den Entwurfsentscheidungen und den Abwägungen, die zu ihnen geführt haben, und weniger auf einer vollständigen Aufzählung aller Funktionen. Für jede zentrale Entscheidung werden die betrachteten Alternativen, der gewählte Weg und der dafür in Kauf genommene Preis benannt.
+Dieses Kapitel stellt die Architektur von TeamBoard vor. Der Schwerpunkt liegt auf den Entwurfsentscheidungen und den Abwägungen, die zu ihnen geführt haben, und weniger auf einer vollständigen Aufzählung aller Funktionen.
 
 \section{Vorstellung und Diskussion der gewählten Architektur}
 \label{sec:architektur-diskussion}
 
 TeamBoard ist als komponentenbasiertes Microservice-System umgesetzt. Das System besteht aus sieben fachlichen Diensten hinter einem gemeinsamen API-Gateway, ergänzt um einen Protokoll-Adapter für die Anbindung von Sprachmodell-Clients. Die Dienste sind entlang fachlicher Grenzen geschnitten und kommunizieren bevorzugt asynchron über einen zentralen Event-Bus.
 
-Die Architektur folgt zwölf verbindlichen Prinzipien, die in der Architektur-Referenz des Repositorys festgehalten sind. Eine Abweichung von einem Prinzip erfordert einen dokumentierten Architecture Decision Record (ADR). Die folgenden Abschnitte diskutieren die wichtigsten dieser Entscheidungen.
+Die Architektur löst die zwölf verbindlichen Prinzipien aus \vref{subsec:nichtfunktionale-anforderungen} ein. Die folgenden Abschnitte diskutieren die wichtigsten der zugrunde liegenden Entscheidungen.
 
 \subsection{Microservices}
 
 Die Aufgabenstellung fordert ausdrücklich ein komponentenbasiertes System mit unabhängig skalierbaren Diensten. Ein modularer Monolith wäre in der Entwicklung und im Betrieb einfacher gewesen und hätte verteilte Transaktionen vermieden. Er hätte jedoch die geforderte unabhängige Skalierung und die klare fachliche Trennung nur eingeschränkt abgebildet. Die Entscheidung fiel daher auf einen Schnitt in eigenständige Dienste \cite{newman2021microservices}. Der Preis dafür ist ein höherer Betriebsaufwand und die Notwendigkeit, Konsistenz über Dienstgrenzen hinweg aktiv zu behandeln.
 
-Der Zuschnitt orientiert sich an Domain-Driven Design \cite{evans2003ddd}. Jeder Dienst bildet einen fachlichen Bounded Context mit eigener Sprache ab. Der Umfang wurde bewusst als tragfähiges Minimum gewählt und lässt sich schrittweise erweitern, statt von Beginn an alle denkbaren Funktionen aufzunehmen.
+Der Zuschnitt orientiert sich an Domain-Driven Design \cite{evans2003ddd}. Jeder Dienst bildet einen fachlichen Bounded Context mit eigener Sprache ab und folgt dem MVP-Schnitt aus \vref{sec:interpretation}.
 
 \subsection{Asynchrone Ereignisse}
 
@@ -49,9 +49,7 @@ Der Project-Service ist die autoritative Quelle für projektbezogene Berechtigun
   \label{fig:architektur-gesamt}
 \end{figure}
 
-Die Grafik gliedert das System in horizontale Schichten. Ganz oben stehen die Clients, das Web-Frontend und der MCP-Client. Darunter liegt das Traefik-Gateway als einziger Eintrittspunkt, das Token bewusst nicht selbst prüft und die Prüfung jedem Dienst überlässt. Es folgt die Reihe der fachlichen Dienste mit ihren Ports, ergänzt um den MCP-Server am rechten Rand. Darunter zieht sich der RabbitMQ-Event-Bus als gemeinsame Leitung durch das System. Am unteren Rand steht die Infrastruktur aus PostgreSQL, Redis und dem Objektspeicher. Die blauen Pfeile zeigen den Anfragefluss durch das Gateway, die orangen Pfeile das Veröffentlichen und Konsumieren von Ereignissen, die gestrichelten Linien die Anbindung an Cache und Objektspeicher. Die Grafik entstammt der Quelle im Repository unter \path{docs/architecture.svg}.
-
-Das Gateway ist der einzige Eintrittspunkt in das System, die fachlichen Ereignisse laufen über den Topic-Exchange, sodass kein Sender seine Empfänger kennt, und jeder Dienst hält seine eigenen Daten. Einzig der Notification-Service ist bewusst zustandsbehaftet, weil er offene WebSocket-Verbindungen hält.
+Die Grafik gliedert das System in horizontale Schichten. Ganz oben stehen die Clients, das Web-Frontend und der MCP-Client. Darunter liegt das Traefik-Gateway als einziger Eintrittspunkt. Es folgt die Reihe der fachlichen Dienste mit ihren Ports, ergänzt um den MCP-Server am rechten Rand. Darunter zieht sich der RabbitMQ-Event-Bus als gemeinsame Leitung durch das System. Am unteren Rand steht die Infrastruktur aus PostgreSQL, Redis und dem Objektspeicher. Die Farb- und Linienlegende der Pfeile ist der Grafik selbst zu entnehmen, deren Quelle im Repository unter \path{docs/architecture.svg} liegt.
 
 \section{Die einzelnen Komponenten}
 \label{sec:komponenten}
@@ -71,7 +69,7 @@ Der Project-Service verwaltet Projekte, Boards und Mitgliedschaften und ist die 
 \subsection{Task-Service}
 \label{sub:task}
 
-Der Task-Service verwaltet Aufgaben innerhalb eines Boards mit Statusübergängen, Zuweisungen, Fälligkeiten, Kommentaren und Anhang-Referenzen. Er führt einen Audit-Trail über Änderungen. Den fachlichen Status einer Spalte leitet er nicht aus dem Spaltennamen ab, sondern übernimmt ihn aus den expliziten Status-Angaben, die über Ereignisse aus dem Board-Kontext eintreffen. Vor schreibenden Operationen prüft er die Berechtigung beim Project-Service.
+Der Task-Service verwaltet Aufgaben innerhalb eines Boards mit Statusübergängen, Zuweisungen, Fälligkeiten, Kommentaren und Anhang-Referenzen. Er führt einen Audit-Trail über Änderungen. Den fachlichen Status einer Spalte übernimmt er aus den Status-Angaben, die über Ereignisse aus dem Board-Kontext eintreffen. Vor schreibenden Operationen prüft er die Berechtigung beim Project-Service.
 
 \subsection{Document-Service}
 \label{sub:document}
@@ -132,7 +130,7 @@ Ein Beispiel für den synchronen Weg ist das Anlegen eines Boards. Der Project-S
 
 Die Verlässlichkeit dieses Zusammenspiels beruht auf zwei Mechanismen. Das Outbox-Pattern stellt sicher, dass ein Ereignis genau dann existiert, wenn die zugehörige Datenänderung committet wurde. Idempotente Konsumenten stellen sicher, dass ein mehrfach zugestelltes Ereignis keinen Schaden anrichtet, indem sie verarbeitete Ereignis-Kennungen festhalten.
 
-\vref{fig:ablauf-event} zeigt den beschriebenen asynchronen Ablauf als Sequenz. Der Task-Service legt das Ereignis über die Outbox auf den Event-Bus. Von dort konsumieren der Notification-Service und der Plugin-Service unabhängig voneinander. Der Notification-Service pusht die Aktualisierung an den Client, der Plugin-Service stellt einen signierten Webhook nach außen zu. Der Task-Service kennt keinen der beiden Empfänger.
+\vref{fig:ablauf-event} stellt diesen asynchronen Ablauf als Sequenz dar.
 
 \begin{figure}[ht]
   \centering
@@ -175,11 +173,9 @@ Die ausführlichen Entwurfsunterlagen liegen im Repository. Der vorliegende Beri
     \midrule
     \path{docs/ARCHITECTURE.md}               & Master-Referenz, Prinzipien, Service-Katalog, Event-Schema \\
     \path{docs/architecture-diagram.md}       & Quelle des Architekturdiagramms \\
-    \path{docs/decisions/0001-...}            & ADR zur Laufzeit-Erweiterbarkeit der Board-Typen \\
-    \path{docs/decisions/0002-...}            & ADR zur Erweiterbarkeit der Board-Darstellung \\
-    \path{docs/decisions/0003-...}            & ADR zu entfernt geladenen Board-Views (Vorschlag) \\
+    \path{docs/decisions/*.md}            & ADRs zu Board Registry \\
     \path{docs/services/*.md}                  & Detail-Design je Dienst mit Datenmodell und Schnittstellen \\
-    \path{docs/specifications/deployment.md}   & Deployment- und CI/CD-Beschreibung \\
+    \path{docs/specifications/*.md}   & Code Guidelines, Deployment und weitere Spezifikationen \\
     \bottomrule
   \end{tabularx}
 \end{table}

@@ -1,8 +1,31 @@
 \chapter{Projektbeschreibung}
 \label{chap:projektbeschreibung}
 
+Dieses Kapitel hält fest, wie das Team die Aufgabenstellung gelesen hat und welche Anforderungen daraus abgeleitet wurden. Der architektonische Entwurf, der auf diesen Anforderungen aufbaut, folgt in \vref{chap:entwurf}.
+
 \section{Interpretation der Aufgabenstellung}
 \label{sec:interpretation}
+
+Die Aufgabenstellung beschreibt ein \enquote{Grundgerüst mit starkem Fokus auf die Architektur}. Sie gibt damit die in \vref{sec:kontext} genannte Priorität vor, an der sich das gesamte Projekt ausrichtet. Bewertet wird die Tragfähigkeit der Architektur, weshalb die Tiefe in den Architekturmustern liegt und die Oberfläche bewusst schlank bleibt.
+
+Der Funktionsumfang folgt dem Gedanken eines Minimum Viable Product (MVP). Das System wird entlang fachlicher Grenzen in ein tragfähiges Minimum geschnitten und schrittweise erweitert, statt von Beginn an alle denkbaren Funktionen aufzunehmen. \vref{tab:interpretation} stellt den zentralen Vorgaben der Aufgabenstellung die daraus abgeleitete Umsetzung gegenüber. Die dort genannten Mechanismen werden im Entwurf und im Deployment vertieft, auf die an den passenden Stellen verwiesen wird.
+
+\begin{table}[ht]
+  \centering
+  \caption{Interpretation der Aufgabenstellung und abgeleitete Umsetzung}
+  \label{tab:interpretation}
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.0cm}X@{}}
+    \toprule
+    \textbf{Vorgabe der Aufgabenstellung} & \textbf{Abgeleitete Umsetzung} \\
+    \midrule
+    Grundgerüst mit Fokus auf die Architektur & Tiefe bei den Architekturmustern, bewusst schlanke Oberfläche \\
+    MVP-Gedanke leitet den Funktionsumfang     & Sieben Dienste als MVP-Schnitt entlang fachlicher Grenzen, agile Erweiterung statt vollständigem Erstwurf \\
+    Erweiterbarkeit für neue Board-Typen       & Board-Typen als Laufzeit-Daten in der Board Registry statt als Code zur Compile-Zeit (\vref{sub:boardregistry}) \\
+    Schnittstelle für Drittsysteme             & OpenAPI-first, Webhooks mit HMAC-Signatur (\vref{sub:plugin}) sowie ein MCP-Zugang für Sprachmodell-Clients (\vref{sub:mcp}) \\
+    Start mit einem einzigen Kommando          & Identischer Start lokal und im Betrieb über \texttt{make up} (\vref{chap:deployment}) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \section{Anforderungen}
 \label{sec:anforderungen}
@@ -10,8 +33,71 @@
 \subsection{Funktionale Anforderungen}
 \label{subsec:funktionale-anforderungen}
 
+Die funktionalen Anforderungen sind in vierundfünfzig Use-Cases dokumentiert, die sich in sieben Bereiche gliedern. \vref{tab:funktionale-anforderungen} fasst diese Bereiche zusammen. Die vollständigen Use-Case-Beschreibungen liegen in der Service-Dokumentation des Repositorys.
+
+\begin{table}[ht]
+  \centering
+  \caption{Funktionale Anforderungsbereiche}
+  \label{tab:funktionale-anforderungen}
+  \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}p{4.4cm}X@{}}
+    \toprule
+    \textbf{ID} & \textbf{Bereich} & \textbf{Inhalt} \\
+    \midrule
+    FA-1 & Authentifizierung und Identität & Registrierung, Login, Token-Refresh, Passwort-Reset, JWKS \\
+    FA-2 & Projekte, Boards und Rollen     & Projekt-CRUD, Mitglieder, Rollenwechsel, Board-Anlage \\
+    FA-3 & Aufgaben und Zusammenarbeit     & Aufgaben, Spaltenwechsel, Zuweisung, Kommentare, Anhänge, Verlauf \\
+    FA-4 & Dokumente                       & Datei-Uploads je Projekt und Aufgabe, Download über vorsignierte URLs \\
+    FA-5 & Echtzeit-Benachrichtigungen     & WebSocket-Verbindungen, Kanäle, Push, persistente Benachrichtigungen \\
+    FA-6 & Webhooks und Integrationen      & Registrierung, Wiederholung, Zustell-Log, Test-Zustellung \\
+    FA-7 & Board-Typen zur Laufzeit        & Registrierung neuer Board-Typen samt Spalten und Darstellung \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
 \subsection{Nichtfunktionale Anforderungen}
 \label{subsec:nichtfunktionale-anforderungen}
 
+Die nichtfunktionalen Anforderungen sind aus den zwölf verbindlichen Architekturprinzipien der Architektur-Referenz abgeleitet. Eine Abweichung von einem Prinzip erfordert einen dokumentierten Architecture Decision Record (ADR). \vref{tab:nfa} nennt die acht wesentlichen Qualitätsziele. Wie der Entwurf sie einlöst, ist Gegenstand von \vref{chap:entwurf}.
+
+\begin{table}[ht]
+  \centering
+  \caption{Nichtfunktionale Anforderungen}
+  \label{tab:nfa}
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}X@{}}
+    \toprule
+    \textbf{Qualitätsziel} & \textbf{Anforderung} \\
+    \midrule
+    Skalierbarkeit   & Dienste unabhängig skalierbar und austauschbar, Zustand außerhalb der Dienste gehalten \\
+    Konsistenz       & Strikte ACID-Konsistenz innerhalb eines Dienstes, Datenänderung und Ereignis über die Outbox in einer Transaktion gekoppelt \\
+    Zuverlässigkeit  & Mehrfach zugestellte Ereignisse ohne Schaden durch idempotente Verarbeitung und eine Dead-Letter-Queue \\
+    Resilienz        & Timeouts, Wiederholungen und Circuit Breaker auf jedem ausgehenden Aufruf \\
+    Sicherheit       & TLS, je Dienst validiertes JWT, interne Service-Tokens, getrennte Verwaltung von Secrets \\
+    Beobachtbarkeit  & Strukturierte Logs, Metriken und verteiltes Tracing in jedem Dienst \\
+    Erweiterbarkeit  & Lose Kopplung, API-first, neue Board-Typen ohne erneutes Deployment \\
+    Betreibbarkeit   & Reproduzierbarer Start mit einem Kommando, lokal wie im Betrieb identisch \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
 \section{User-Stories}
 \label{sec:user-stories}
+
+Die folgenden repräsentativen User-Stories konkretisieren die funktionalen Anforderungen aus Sicht der Beteiligten. Jede Story ist auf einen dokumentierten Use-Case rückführbar.
+
+\begin{table}[ht]
+  \centering
+  \caption{Repräsentative User-Stories}
+  \label{tab:user-stories}
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.0cm}X@{}}
+    \toprule
+    \textbf{Rolle} & \textbf{User-Story} \\
+    \midrule
+    Projekt-Admin   & Als Projekt-Admin möchte ich Mitglieder mit Rollen einladen, um Zugriffsrechte differenziert zu steuern. \\
+    Team-Mitglied   & Als Team-Mitglied möchte ich Aufgaben zwischen Spalten verschieben, um den Fortschritt sichtbar zu machen. \\
+    Team-Mitglied   & Als Team-Mitglied möchte ich Änderungen anderer ohne Neuladen der Seite sofort sehen. \\
+    Team-Mitglied   & Als Team-Mitglied möchte ich Dokumente versioniert ablegen, um frühere Stände wiederherstellen zu können. \\
+    Externes System & Als externes System möchte ich per Webhook über Änderungen informiert werden, um CI/CD-Pipelines anzustoßen. \\
+    Nutzer          & Als Nutzer möchte ich meine Aufgaben direkt in Claude abfragen, ohne die Oberfläche zu öffnen. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

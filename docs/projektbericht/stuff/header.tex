@@ -43,8 +43,6 @@
     \label{#3}%
   \end{figure}%
 }
-% Sichtbarer Hinweis auf im Bericht noch auszuarbeitende Inhalte.
-\newcommand{\ausarbeiten}[1]{\textcolor{codered}{\textbf{[noch auszuarbeiten: #1]}}}
 
 \usepackage{ifpdf}
 \ifpdf
@@ -80,7 +78,14 @@
 \usepackage{booktabs}           	 % Netteres Tabellenlayout
 \usepackage{multicol}               % Mehrspaltige Bereiche
 \usepackage{multirow}
-\usepackage{quotchap}               % Beautiful chapter decoration
+% quotchap entfernt: erzeugte grosse, rechtsbuendige Kapitelnummern.
+% Stattdessen kompakte KOMA-Kapitelkoepfe, nur wenig groesser als \section,
+% ohne grosse Nummer und linksbuendig.
+\setkomafont{chapter}{\LARGE\bfseries}
+\RedeclareSectionCommand[
+    beforeskip=-.5\baselineskip,
+    afterskip=.6\baselineskip
+]{chapter}
 \usepackage{subfig}                 % allow sub figures
 \usepackage{tabularx}               % Tabellen mit fester Breite
 \usepackage{lipsum} % für Blindtexte
